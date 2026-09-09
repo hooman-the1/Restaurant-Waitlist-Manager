@@ -616,7 +616,7 @@ Use a single repository:
 
 ```text
 /
-├── frontend/
+├── front/
 │   └── Angular application
 └── backend/
     └── FastAPI application
@@ -917,7 +917,7 @@ If a new feature is desired, the scope must be intentionally reopened first.
 112. Angular client-side routing.
 113. No API versioning.
 114. No separate Pydantic schema layer.
-115. Single monorepo with `/frontend` and `/backend`.
+115. Single monorepo with `/front` and `/backend`.
 116. Backend tests mock database layer.
 117. Frontend tests are unit tests only.
 118. Backend includes FastAPI endpoint tests.

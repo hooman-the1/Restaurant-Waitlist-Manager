@@ -1,6 +1,6 @@
 # Frontend Backlog
 
-These tasks implement only the frozen MVP in `docs/plan.md`. Each task must include focused Angular unit tests and must not introduce a UI library, client-side validation, state-management library, end-to-end tests, or a direct HTTP call from a component, guard, or template.
+These tasks implement only the frozen MVP in `doc/plan.md`. Each task must include focused Angular unit tests and must not introduce a UI library, client-side validation, state-management library, end-to-end tests, or a direct HTTP call from a component, guard, or template.
 
 ## 1. Initialize the empty Angular frontend
 Goal: Create an Angular application in `front/` that starts successfully and has one passing unit test.
@@ -34,54 +34,38 @@ Description: Implement the private-token portion of the customer waitlist servic
 Goal: Support dashboard queue loading and staff status changes without a backend.
 Description: Implement the dashboard service interface with seeded active and same-day resolved entries for a verified mock restaurant. Return the precise fields the dashboard may display, apply seated/cancelled/no-show choices immediately, and move resolved entries out of the active queue while recalculating positions. Add unit tests for dashboard access, FIFO ordering, empty sections, and each status transition.
 
-## 9. Add the REST adapter for restaurant accounts
-Goal: Connect restaurant signup, verification, and session checks to the future API behind the existing contract.
-Description: Implement the HTTP-backed restaurant-account adapter using Angular `HttpClient` only within the adapter and `withCredentials` for cookie-authenticated requests. Map account endpoint responses and HTTP failures into the existing application-owned result types; do not change components, guards, or the mock implementation. Add HTTP unit tests for request shape, credentials, and validation/unauthorized/error mapping.
-
-## 10. Add the REST adapter for public waitlist joining
-Goal: Connect public restaurant lookup and customer joining to the future API behind the existing contract.
-Description: Implement the HTTP-backed public waitlist adapter using the established slug and join-result data, while preserving backend-provided duplicate and validation errors for the UI. Do not include restaurant-cookie behavior or private status-token requests in this adapter. Add HTTP unit tests for lookup and join request shapes plus not-found, validation, duplicate, and unexpected-error mapping.
-
-## 11. Add the REST adapter for private customer status
-Goal: Connect private status lookup and cancellation to the future API behind the existing contract.
-Description: Implement the HTTP-backed private customer-status adapter using the unguessable status token and application-owned result types. It must map active, resolved, not-found, cancellation, and unexpected-error responses without exposing internal IDs or using restaurant-cookie behavior. Add HTTP unit tests for status and cancellation request shapes plus all mapped outcomes.
-
-## 12. Add the REST adapter for restaurant dashboard operations
-Goal: Connect dashboard loading and staff resolution to the future API behind the existing contract.
-Description: Implement the HTTP-backed dashboard adapter with `withCredentials` and mapping for authorized data, unauthenticated access, status changes, and unexpected failures. Keep all endpoint details within this adapter and do not duplicate authorization or queue logic in UI consumers. Add HTTP unit tests for the read and resolution request shapes, credentials, and error mapping.
-
-## 13. Build the restaurant signup page
+## 9. Build the restaurant signup page
 Goal: Let a restaurant submit its name, email, and password to begin account creation.
 Description: Implement a template-driven signup form with labels, one form-level backend-error area, preserved restaurant name/email after validation errors, and a cleared password after a failed submission. Disable the submit control and show a simple loading state while the request is pending; do not add client-side validation or show the public URL. Add component tests for submission, loading, backend-error handling, and navigation to the verification step/result specified by the service contract.
 
-## 14. Build the email-verification callback page
+## 10. Build the email-verification callback page
 Goal: Verify a restaurant from its single-use link and direct successful users to the dashboard.
 Description: Read the verification token from the callback route, invoke the restaurant-account service once, and show a simple loading, success-transition, or generic/error state as appropriate. On success navigate directly to the dashboard; do not create login, resend-verification, or account-recovery UI. Add component tests for token handling, successful dashboard navigation, invalid/used-link handling, and unexpected failures.
 
-## 15. Add restaurant dashboard access protection
+## 11. Add restaurant dashboard access protection
 Goal: Prevent unauthenticated browser navigation to the restaurant dashboard.
 Description: Implement an Angular route guard that asks the centralized restaurant-account service whether the current browser session may access the dashboard. Redirect denied access to an appropriate existing generic route/message while treating the guard as UX only—the future backend remains authoritative. Add unit tests for allowed, denied, and service-failure outcomes.
 
-## 16. Build the restaurant dashboard queue views
+## 12. Build the restaurant dashboard queue views
 Goal: Display the restaurant’s active FIFO queue and same-day resolved entries.
 Description: Implement the protected dashboard using the dashboard service, showing the restaurant name, an Active section, and a Resolved Today section. Active rows show position, customer name, full phone number, and party size; resolved rows show name, party size, and plain-text final status, with the specified empty-state messages. Provide a manual refresh control and loading/error states, but no auto-refresh, counts, public URL, email, filtering, sorting, search, pagination, notes, or table controls. Add unit tests for populated and empty sections, data visibility rules, and manual refresh.
 
-## 17. Add immediate staff resolution controls to the dashboard
+## 13. Add immediate staff resolution controls to the dashboard
 Goal: Allow staff to mark active customers seated, cancelled, or no-show from one immediate-action menu.
 Description: Add one dropdown/menu per active row with Seated, Cancelled, and No-show options; applying a selection must immediately call the dashboard service and refresh/update displayed data. Do not add confirmation dialogs, Apply buttons, success toasts, undo, hard delete, or editing controls. Add unit tests for each selection, pending/error behavior, and removal from Active plus appearance in Resolved Today after success.
 
-## 18. Build the public restaurant waitlist join page
+## 14. Build the public restaurant waitlist join page
 Goal: Let a customer join the waitlist identified by a public restaurant slug.
 Description: Load and display the restaurant name as the page title, then provide a template-driven form for name, phone, and party size. Submit through the customer waitlist service, preserve all entered values on backend validation errors, show the duplicate-phone message supplied by the service, and disable the button with `Joining…` while pending; do not add client-side validation, queue size, wait time, CAPTCHA, notes, or customer accounts. On success navigate directly to the private status URL. Add unit tests for initial lookup, successful submission/navigation, value preservation, duplicate-phone error, generic error, and loading state.
 
-## 19. Build the private customer status and cancellation page
+## 15. Build the private customer status and cancellation page
 Goal: Show a customer’s private queue state and let them cancel an active entry.
 Description: Resolve the unguessable status token from the route and display only the restaurant name plus either the numeric queue position while active or the plain-text resolved status. Provide immediate cancellation for active entries with no confirmation dialog; do not show name, phone, party size, join time, estimated wait, or a special “you’re next” message. Handle an unavailable/deleted token as the generic not-found route/message. Add unit tests for active, resolved, missing, cancellation-success, cancellation-error, and data-privacy rendering cases.
 
-## 20. Add active-status polling lifecycle behavior
+## 16. Add active-status polling lifecycle behavior
 Goal: Refresh an active customer’s status every 30 seconds and stop once it is resolved.
 Description: Extend the private status page so polling begins only after an active status is loaded, uses the centralized customer waitlist service, and stops when the entry becomes seated, cancelled, or no-show or when the component is destroyed. Do not add a manual refresh control. Add time-controlled unit tests for the 30-second cadence, transition from active to resolved, no polling after resolution, cleanup on destruction, and request-failure behavior.
 
-## 21. Verify the mock-backed frontend as an integrated local demo
+## 17. Verify the mock-backed frontend as an integrated local demo
 Goal: Confirm the complete frontend can be started and exercised with no backend running.
 Description: Configure the development composition point to use the existing mock services and confirm the demo data makes each implemented route reachable, including a public restaurant, active customer status token, resolved customer status token, and verified restaurant dashboard session. Run the complete Angular unit-test suite and the production build; fix only integration/configuration issues discovered by those checks. Add a concise developer note inside `front/` describing how to start the mock-backed app and the available demo paths, without creating a repository README.
