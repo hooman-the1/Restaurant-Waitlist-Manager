@@ -144,7 +144,7 @@ export function createDefaultMockApplication(): MockApplicationComposition {
         phone: '(555) 010-1000',
         partySize: 6,
         status: 'active',
-        privateStatusToken: crypto.randomUUID()
+        privateStatusToken: '8f4d6e2b-1a73-4c95-b0e8-62d9f71a3c44'
       },
       {
         restaurantSlug: 'demo-restaurant',
@@ -160,7 +160,7 @@ export function createDefaultMockApplication(): MockApplicationComposition {
         phone: '555-010-3000',
         partySize: 4,
         status: 'seated',
-        privateStatusToken: crypto.randomUUID()
+        privateStatusToken: 'c2a7198e-6d40-4b53-9f81-37e5a6c04bd2'
       }
     ]
   });
