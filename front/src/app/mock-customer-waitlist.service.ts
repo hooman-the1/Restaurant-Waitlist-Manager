@@ -1,8 +1,11 @@
 import { asapScheduler, defer, Observable, observeOn, of } from 'rxjs';
 
 import {
+  ActiveDashboardEntry,
+  ActiveEntryActionReference,
   CancelWaitlistEntryInput,
   CancelWaitlistEntryResult,
+  DashboardView,
   DUPLICATE_PHONE_MESSAGE,
   FinalStatus,
   JoinWaitlistInput,
@@ -11,6 +14,8 @@ import {
   PrivateStatusResult,
   PublicWaitlistLookupInput,
   PublicWaitlistLookupResult,
+  ResolvedDashboardEntry,
+  StaffResolution,
   UNEXPECTED_ERROR_MESSAGE
 } from './api-contracts';
 import { CustomerWaitlistService } from './service-boundary';
@@ -24,6 +29,7 @@ export interface MockCustomerWaitlistTestOptions {
   readonly restaurants?: readonly MockRestaurantSeed[];
   readonly entries?: readonly MockWaitlistEntryTestSeed[];
   readonly privateTokenGenerator?: () => string;
+  readonly actionReferenceGenerator?: () => string;
   readonly beforeLookup?: (restaurantSlug: string) => void;
   readonly beforePrivateStatusLookup?: (privateStatusToken: string) => void;
   readonly beforeCancelCommit?: (privateStatusToken: string) => void;
@@ -41,6 +47,7 @@ interface MockWaitlistEntry {
   readonly status: MockEntryStatus;
   readonly insertionOrder: number;
   readonly privateStatusToken: string;
+  readonly actionReference: ActiveEntryActionReference;
 }
 
 export interface MockWaitlistEntryTestSeed {
@@ -50,6 +57,7 @@ export interface MockWaitlistEntryTestSeed {
   readonly partySize: number;
   readonly status: MockEntryStatus;
   readonly privateStatusToken: string;
+  readonly actionReference?: string;
 }
 
 export interface MockWaitlistEntrySnapshot {
@@ -69,7 +77,12 @@ export interface MockWaitlistSnapshot {
   readonly entries: readonly MockWaitlistEntrySnapshot[];
 }
 
-class MockWaitlistState {
+export interface MockCustomerWaitlistComposition {
+  readonly service: MockCustomerWaitlistService;
+  readonly state: MockWaitlistState;
+}
+
+export class MockWaitlistState {
   private readonly restaurants = new Map<string, MockRestaurantSeed>();
   private readonly entries: MockWaitlistEntry[] = [];
   private nextInsertionOrder = 1;
@@ -95,6 +108,10 @@ class MockWaitlistState {
 
   hasPrivateToken(privateStatusToken: string): boolean {
     return this.entries.some((entry) => entry.privateStatusToken === privateStatusToken);
+  }
+
+  hasActionReference(actionReference: string): boolean {
+    return this.entries.some((entry) => entry.actionReference === actionReference);
   }
 
   appendEntry(
@@ -154,10 +171,78 @@ class MockWaitlistState {
     return true;
   }
 
+  dashboardFor(restaurantSlug: string, beforeRead: () => void): DashboardView | undefined {
+    beforeRead();
+    const restaurant = this.restaurants.get(restaurantSlug);
+    if (!restaurant) {
+      return undefined;
+    }
+
+    const activeEntries: ActiveDashboardEntry[] = this.entries
+      .filter((entry) => entry.restaurantSlug === restaurantSlug && entry.status === 'active')
+      .sort((left, right) => left.insertionOrder - right.insertionOrder)
+      .map((entry, index) => ({
+        position: index + 1,
+        customerName: entry.customerName,
+        phone: entry.phone,
+        partySize: entry.partySize,
+        actionReference: entry.actionReference
+      }));
+    const resolvedToday: ResolvedDashboardEntry[] = this.entries
+      .filter((entry) => entry.restaurantSlug === restaurantSlug && entry.status !== 'active')
+      .sort((left, right) => left.insertionOrder - right.insertionOrder)
+      .map((entry) => ({
+        customerName: entry.customerName,
+        partySize: entry.partySize,
+        finalStatus: entry.status as FinalStatus
+      }));
+
+    return {
+      restaurantName: restaurant.restaurantName,
+      activeEntries,
+      resolvedToday
+    };
+  }
+
+  resolveActiveEntry(
+    restaurantSlug: string,
+    actionReference: string,
+    resolution: StaffResolution,
+    beforeCommit: (actionReference: string) => void
+  ): boolean {
+    const entryIndex = this.entries.findIndex(
+      (entry) =>
+        entry.restaurantSlug === restaurantSlug &&
+        entry.status === 'active' &&
+        entry.actionReference === actionReference
+    );
+    if (entryIndex < 0) {
+      return false;
+    }
+
+    const resolvedEntry: MockWaitlistEntry = {
+      ...this.entries[entryIndex],
+      status: resolution
+    };
+    beforeCommit(actionReference);
+    this.entries[entryIndex] = resolvedEntry;
+    return true;
+  }
+
   snapshot(selectedRestaurantSlug: string | undefined): MockWaitlistSnapshot {
     return {
       selectedRestaurantSlug,
-      entries: this.entries.map((entry) => ({ ...entry }))
+      entries: this.entries.map((entry) => ({
+        restaurantSlug: entry.restaurantSlug,
+        restaurantName: entry.restaurantName,
+        customerName: entry.customerName,
+        phone: entry.phone,
+        comparisonPhone: entry.comparisonPhone,
+        partySize: entry.partySize,
+        status: entry.status,
+        insertionOrder: entry.insertionOrder,
+        privateStatusToken: entry.privateStatusToken
+      }))
     };
   }
 }
@@ -168,6 +253,7 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
   private constructor(
     private readonly state: MockWaitlistState,
     private readonly privateTokenGenerator: () => string,
+    private readonly actionReferenceGenerator: () => string,
     private readonly beforeLookup: (restaurantSlug: string) => void,
     private readonly beforePrivateStatusLookup: (privateStatusToken: string) => void,
     private readonly beforeCancelCommit: (privateStatusToken: string) => void
@@ -179,6 +265,7 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
         { slug: 'demo-restaurant', restaurantName: 'Demo Restaurant' }
       ]),
       () => crypto.randomUUID(),
+      () => crypto.randomUUID(),
       () => undefined,
       () => undefined,
       () => undefined
@@ -188,26 +275,54 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
   static createForTesting(
     options: MockCustomerWaitlistTestOptions = {}
   ): MockCustomerWaitlistService {
+    return MockCustomerWaitlistService.createForMockComposition(options).service;
+  }
+
+  /** Internal/test composition seam; application consumers receive only the service boundary. */
+  static createForMockComposition(
+    options: MockCustomerWaitlistTestOptions = {}
+  ): MockCustomerWaitlistComposition {
     const state = new MockWaitlistState(options.restaurants ?? []);
     options.entries?.forEach((entry) => {
       const restaurant = state.restaurantBySlug(entry.restaurantSlug);
       if (!restaurant) {
         throw new Error('A test entry must reference a seeded restaurant.');
       }
+      const actionReference = entry.actionReference ?? crypto.randomUUID();
+      if (
+        !entry.privateStatusToken ||
+        state.hasPrivateToken(entry.privateStatusToken) ||
+        state.hasActionReference(entry.privateStatusToken)
+      ) {
+        throw new Error('A test private token must be non-empty and unique.');
+      }
+      if (
+        !actionReference ||
+        actionReference === entry.privateStatusToken ||
+        state.hasActionReference(actionReference) ||
+        state.hasPrivateToken(actionReference)
+      ) {
+        throw new Error('A test action reference must be non-empty and unique.');
+      }
       state.appendEntry({
         ...entry,
         restaurantName: restaurant.restaurantName,
-        comparisonPhone: entry.phone.replace(/[ ()-]/g, '')
+        comparisonPhone: entry.phone.replace(/[ ()-]/g, ''),
+        actionReference: actionReference as ActiveEntryActionReference
       });
     });
 
-    return new MockCustomerWaitlistService(
+    return {
       state,
-      options.privateTokenGenerator ?? (() => crypto.randomUUID()),
-      options.beforeLookup ?? (() => undefined),
-      options.beforePrivateStatusLookup ?? (() => undefined),
-      options.beforeCancelCommit ?? (() => undefined)
-    );
+      service: new MockCustomerWaitlistService(
+        state,
+        options.privateTokenGenerator ?? (() => crypto.randomUUID()),
+        options.actionReferenceGenerator ?? (() => crypto.randomUUID()),
+        options.beforeLookup ?? (() => undefined),
+        options.beforePrivateStatusLookup ?? (() => undefined),
+        options.beforeCancelCommit ?? (() => undefined)
+      )
+    };
   }
 
   lookupPublicRestaurant(
@@ -293,7 +408,21 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
     }
 
     const privateStatusToken = this.privateTokenGenerator();
-    if (!privateStatusToken || this.state.hasPrivateToken(privateStatusToken)) {
+    if (
+      !privateStatusToken ||
+      this.state.hasPrivateToken(privateStatusToken) ||
+      this.state.hasActionReference(privateStatusToken)
+    ) {
+      return { kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE };
+    }
+
+    const actionReference = this.actionReferenceGenerator();
+    if (
+      !actionReference ||
+      actionReference === privateStatusToken ||
+      this.state.hasActionReference(actionReference) ||
+      this.state.hasPrivateToken(actionReference)
+    ) {
       return { kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE };
     }
 
@@ -305,7 +434,8 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
       comparisonPhone,
       partySize: input.partySize,
       status: 'active',
-      privateStatusToken
+      privateStatusToken,
+      actionReference: actionReference as ActiveEntryActionReference
     });
 
     return { kind: 'success', privateStatusToken };
