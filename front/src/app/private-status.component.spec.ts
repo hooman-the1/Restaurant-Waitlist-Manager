@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -238,7 +238,7 @@ describe('PrivateStatusComponent', () => {
     ['an Observable error', throwError(() => new Error('cancel transport detail'))],
     ['empty completion', EMPTY]
   ].forEach(([description, response]) => {
-    it(`retains active state and allows retry after ${description}`, () => {
+    it(`retains active state and allows retry after ${description}`, fakeAsync(() => {
       makeActive('Retry Restaurant', 5);
       waitlist.cancelEntry.and.returnValue(response as Observable<CancelWaitlistEntryResult>);
 
@@ -251,10 +251,15 @@ describe('PrivateStatusComponent', () => {
       );
       expect(page().querySelector<HTMLButtonElement>('button')?.disabled).toBeFalse();
       expect(text()).not.toContain('cancel transport detail');
-    });
+      tick(29_999);
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+      tick(1);
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+      fixture.destroy();
+    }));
   });
 
-  it('retains active state and allows retry when cancellation throws synchronously', () => {
+  it('retains active state and allows retry when cancellation throws synchronously', fakeAsync(() => {
     makeActive('Retry Restaurant', 6);
     waitlist.cancelEntry.and.callFake(() => {
       throw new Error('synchronous cancel detail');
@@ -268,7 +273,12 @@ describe('PrivateStatusComponent', () => {
       UNEXPECTED_ERROR_MESSAGE
     );
     expect(page().querySelector<HTMLButtonElement>('button')?.disabled).toBeFalse();
-  });
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  }));
 
   it('consumes only the first cancellation result', () => {
     makeActive('First Restaurant', 1);
@@ -345,6 +355,363 @@ describe('PrivateStatusComponent', () => {
     cancellation.next({ kind: 'not-found' });
     expect(router.navigateByUrl).not.toHaveBeenCalled();
   });
+
+  [
+    ['pending', NEVER],
+    ['resolved', of({ kind: 'resolved', restaurantName: 'Done', finalStatus: 'seated' } as const)],
+    ['not-found', of({ kind: 'not-found' } as const)],
+    ['unexpected', of({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE } as const)],
+    ['Observable error', throwError(() => new Error('initial detail'))],
+    ['empty completion', EMPTY]
+  ].forEach(([description, response]) => {
+    it(`does not create polling after an initial ${description} outcome`, fakeAsync(() => {
+      configure(response as Observable<PrivateStatusResult>);
+      create();
+
+      tick(120_000);
+
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+      fixture.destroy();
+    }));
+  });
+
+  it('does not create polling after a synchronous initial lookup throw', fakeAsync(() => {
+    configure();
+    waitlist.loadPrivateStatus.and.callFake(() => {
+      throw new Error('initial synchronous detail');
+    });
+    create();
+
+    tick(120_000);
+
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+  }));
+
+  it('makes the first same-token automatic lookup at exactly 30 seconds', fakeAsync(() => {
+    makeActive('Cadence Restaurant', 4, 'Exact Poll Token+Case');
+    waitlist.loadPrivateStatus.and.returnValue(NEVER);
+
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    expect(waitlist.loadPrivateStatus.calls.mostRecent().args[0]).toEqual({
+      privateToken: 'Exact Poll Token+Case'
+    });
+    fixture.destroy();
+  }));
+
+  it('anchors the first tick to when an asynchronous initial active result arrives', fakeAsync(() => {
+    const initial = new Subject<PrivateStatusResult>();
+    configure(initial, 'delayed-active-token');
+    create();
+    tick(10_000);
+    initial.next({ kind: 'active', restaurantName: 'Delayed Active', position: 4 });
+    initial.complete();
+    waitlist.loadPrivateStatus.and.returnValue(NEVER);
+
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  }));
+
+  it('keeps one fixed lookup cadence at 30, 60, and 90 seconds without calls between ticks', fakeAsync(() => {
+    makeActive('Cadence Restaurant', 1);
+    waitlist.loadPrivateStatus.and.returnValue(
+      of({ kind: 'active', restaurantName: 'Cadence Restaurant', position: 1 })
+    );
+
+    tick(30_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    tick(30_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(4);
+    fixture.destroy();
+  }));
+
+  it('skips overlapping ticks and waits for the original next cadence tick without catch-up', fakeAsync(() => {
+    makeActive('Slow Restaurant', 6);
+    const slowPoll = new Subject<PrivateStatusResult>();
+    waitlist.loadPrivateStatus.and.returnValue(slowPoll);
+
+    tick(30_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    expect(text()).toContain('Slow Restaurant');
+    expect(text()).toContain('#6');
+    expect(page().querySelector('button')).not.toBeNull();
+
+    tick(60_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    waitlist.loadPrivateStatus.and.returnValue(NEVER);
+    tick(5_000);
+    slowPoll.next({ kind: 'active', restaurantName: 'Settled at 95', position: 5 });
+    slowPoll.complete();
+    fixture.detectChanges();
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+
+    tick(24_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    fixture.destroy();
+  }));
+
+  it('updates active polling data and clears a prior polling error without shifting cadence', fakeAsync(() => {
+    makeActive('Old Restaurant', 8);
+    waitlist.loadPrivateStatus.and.returnValue(
+      of({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE })
+    );
+
+    tick(30_000);
+    fixture.detectChanges();
+    expect(text()).toContain('Old Restaurant');
+    expect(text()).toContain('#8');
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      UNEXPECTED_ERROR_MESSAGE
+    );
+
+    waitlist.loadPrivateStatus.and.returnValue(
+      of({ kind: 'active', restaurantName: 'Updated Restaurant', position: 3 })
+    );
+    tick(30_000);
+    fixture.detectChanges();
+
+    expect(text()).toContain('Updated Restaurant');
+    expect(text()).toContain('#3');
+    expect(text()).not.toContain('Old Restaurant');
+    expect(page().querySelector('[role="alert"]')).toBeNull();
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    fixture.destroy();
+  }));
+
+  [
+    ['seated', 'Seated'],
+    ['cancelled', 'Cancelled'],
+    ['no-show', 'No-show']
+  ].forEach(([finalStatus, label]) => {
+    it(`stops permanently when polling resolves as ${finalStatus}`, fakeAsync(() => {
+      makeActive('Terminal Restaurant', 2);
+      waitlist.loadPrivateStatus.and.returnValue(of({
+        kind: 'resolved',
+        restaurantName: 'Terminal Restaurant',
+        finalStatus: finalStatus as FinalStatus
+      }));
+
+      tick(30_000);
+      fixture.detectChanges();
+
+      expect(page().querySelector('[data-final-status]')?.textContent?.trim()).toBe(label);
+      expect(page().querySelector('button, [data-position], [role="alert"]')).toBeNull();
+      tick(120_000);
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+      fixture.destroy();
+    }));
+  });
+
+  it('clears private state, navigates once, and stops permanently on polling not-found', fakeAsync(() => {
+    makeActive('Deleted Restaurant', 10);
+    const poll = new Subject<PrivateStatusResult>();
+    waitlist.loadPrivateStatus.and.returnValue(poll);
+    tick(30_000);
+
+    poll.next({ kind: 'not-found' });
+    poll.complete();
+    fixture.detectChanges();
+
+    expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/');
+    expect(text()).toBe('');
+    tick(120_000);
+    poll.next({ kind: 'active', restaurantName: 'Late', position: 1 });
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    expect(router.navigateByUrl).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+  }));
+
+  [
+    ['unexpected result', of({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE } as const)],
+    ['Observable error', throwError(() => new Error('poll transport detail'))],
+    ['empty completion', EMPTY]
+  ].forEach(([description, response]) => {
+    it(`retains active UI and retries only on the next cadence tick after polling ${description}`, fakeAsync(() => {
+      makeActive('Retry Poll Restaurant', 7);
+      waitlist.loadPrivateStatus.and.returnValue(response as Observable<PrivateStatusResult>);
+
+      tick(30_000);
+      fixture.detectChanges();
+
+      expect(text()).toContain('Retry Poll Restaurant');
+      expect(text()).toContain('#7');
+      expect(page().querySelector<HTMLButtonElement>('button')?.disabled).toBeFalse();
+      expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+        UNEXPECTED_ERROR_MESSAGE
+      );
+      expect(text()).not.toContain('poll transport detail');
+      tick(29_999);
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+
+      waitlist.loadPrivateStatus.and.returnValue(
+        of({ kind: 'active', restaurantName: 'Recovered', position: 2 })
+      );
+      tick(1);
+      fixture.detectChanges();
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+      expect(text()).toContain('Recovered');
+      expect(page().querySelector('[role="alert"]')).toBeNull();
+      fixture.destroy();
+    }));
+  });
+
+  it('retains active UI and retries on cadence after a synchronous polling throw', fakeAsync(() => {
+    makeActive('Synchronous Retry', 3);
+    waitlist.loadPrivateStatus.and.callFake(() => {
+      throw new Error('synchronous poll detail');
+    });
+
+    tick(30_000);
+    fixture.detectChanges();
+    expect(text()).toContain('Synchronous Retry');
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      UNEXPECTED_ERROR_MESSAGE
+    );
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    waitlist.loadPrivateStatus.and.returnValue(NEVER);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    fixture.destroy();
+  }));
+
+  it('keeps exactly one generic feedback message across repeated polling failures', fakeAsync(() => {
+    makeActive('Repeated Failure', 3);
+    waitlist.loadPrivateStatus.and.returnValue(
+      of({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE })
+    );
+
+    tick(90_000);
+    fixture.detectChanges();
+
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(4);
+    expect(page().querySelectorAll('[role="alert"]').length).toBe(1);
+    expect(page().querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+      UNEXPECTED_ERROR_MESSAGE
+    );
+    fixture.destroy();
+  }));
+
+  it('invalidates a pending poll before cancellation and skips ticks until cancellation settles', fakeAsync(() => {
+    makeActive('Cancellation Race', 5);
+    const oldPoll = new Subject<PrivateStatusResult>();
+    const cancellation = new Subject<CancelWaitlistEntryResult>();
+    waitlist.loadPrivateStatus.and.returnValue(oldPoll);
+    waitlist.cancelEntry.and.returnValue(cancellation);
+    tick(30_000);
+
+    cancel();
+
+    expect(oldPoll.observers.length).toBe(0);
+    expect(waitlist.cancelEntry).toHaveBeenCalledTimes(1);
+    tick(60_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    oldPoll.next({ kind: 'not-found' });
+    oldPoll.error(new Error('late poll failure'));
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+
+    cancellation.next({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE });
+    cancellation.complete();
+    fixture.detectChanges();
+    waitlist.loadPrivateStatus.and.returnValue(NEVER);
+    tick(29_999);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(1);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    fixture.destroy();
+  }));
+
+  [
+    ['cancelled', of({ kind: 'cancelled' } as const)],
+    ['not-found', of({ kind: 'not-found' } as const)]
+  ].forEach(([outcome, response]) => {
+    it(`stops polling permanently after cancellation ${outcome}`, fakeAsync(() => {
+      makeActive('Cancel Terminal', 4);
+      waitlist.cancelEntry.and.returnValue(response as Observable<CancelWaitlistEntryResult>);
+
+      cancel();
+      tick(120_000);
+
+      expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(1);
+      fixture.destroy();
+    }));
+  });
+
+  it('gives a reused active token a fresh cadence and cannot revive the old token lifecycle', fakeAsync(() => {
+    const initial = new Subject<PrivateStatusResult>();
+    configure(initial, 'old-token');
+    waitlist.loadPrivateStatus.and.callFake(({ privateToken }) =>
+      privateToken === 'old-token'
+        ? initial
+        : of({ kind: 'active', restaurantName: 'New Restaurant', position: 1 })
+    );
+    create();
+    initial.next({ kind: 'active', restaurantName: 'Old Restaurant', position: 9 });
+    fixture.detectChanges();
+    tick(20_000);
+
+    routeParameters.next(convertToParamMap({ token: 'New Token+Case' }));
+    fixture.detectChanges();
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(10_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    tick(20_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(3);
+    expect(waitlist.loadPrivateStatus.calls.mostRecent().args[0]).toEqual({
+      privateToken: 'New Token+Case'
+    });
+    initial.next({ kind: 'not-found' });
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+    fixture.destroy();
+  }));
+
+  it('consumes only the first automatic result and permanently obeys that terminal value', fakeAsync(() => {
+    makeActive('First Result', 2);
+    const poll = new Subject<PrivateStatusResult>();
+    waitlist.loadPrivateStatus.and.returnValue(poll);
+    tick(30_000);
+
+    poll.next({ kind: 'resolved', restaurantName: 'First Result', finalStatus: 'seated' });
+    expect(poll.observers.length).toBe(0);
+    poll.next({ kind: 'active', restaurantName: 'Late Result', position: 1 });
+    poll.error(new Error('late terminal'));
+    fixture.detectChanges();
+    tick(120_000);
+
+    expect(text()).toContain('Seated');
+    expect(text()).not.toContain('Late Result');
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    fixture.destroy();
+  }));
+
+  it('cancels timer and pending automatic lookup on teardown', fakeAsync(() => {
+    makeActive('Destroy Restaurant', 2);
+    const poll = new Subject<PrivateStatusResult>();
+    waitlist.loadPrivateStatus.and.returnValue(poll);
+    tick(30_000);
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+
+    fixture.destroy();
+    expect(poll.observers.length).toBe(0);
+    tick(120_000);
+    poll.next({ kind: 'not-found' });
+
+    expect(waitlist.loadPrivateStatus).toHaveBeenCalledTimes(2);
+    expect(router.navigateByUrl).not.toHaveBeenCalled();
+  }));
 
   it('never renders private or excluded queue data or refresh controls', () => {
     const overfullResult = {

@@ -1,11 +1,12 @@
 <p *ngIf="isLookupPending">Loading…</p>
 
-<p *ngIf="lookupError" role="alert">{{ lookupError }}</p>
+<p *ngIf="lookupError || cancellationError" role="alert">
+  {{ cancellationError || lookupError }}
+</p>
 
 <section *ngIf="activeStatus as active">
   <h1>{{ active.restaurantName }}</h1>
   <p data-position>#{{ active.position }}</p>
-  <p *ngIf="cancellationError" role="alert">{{ cancellationError }}</p>
   <button type="button" [disabled]="isCancellationPending" (click)="cancel()">
     {{ isCancellationPending ? 'Cancelling…' : 'Cancel' }}
   </button>

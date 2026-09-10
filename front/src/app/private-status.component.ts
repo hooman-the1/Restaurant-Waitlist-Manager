@@ -12,7 +12,8 @@ import {
   switchMap,
   take,
   takeUntil,
-  tap
+  tap,
+  timer
 } from 'rxjs';
 
 import {
@@ -44,6 +45,9 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
   private readonly waitlist = inject(CUSTOMER_WAITLIST_SERVICE);
   private readonly destroyed = new Subject<void>();
   private cancellationSubscription: Subscription | null = null;
+  private pollingTimerSubscription: Subscription | null = null;
+  private automaticLookupSubscription: Subscription | null = null;
+  private isAutomaticLookupPending = false;
   private activeToken: string | null = null;
   private lookupToken: string | null = null;
 
@@ -55,10 +59,11 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
         switchMap((privateToken) => this.lookup(privateToken)),
         takeUntil(this.destroyed)
       )
-      .subscribe((result) => this.handleLookupResult(result));
+      .subscribe((result) => this.handleInitialLookupResult(result));
   }
 
   ngOnDestroy(): void {
+    this.stopPolling();
     this.cancellationSubscription?.unsubscribe();
     this.destroyed.next();
     this.destroyed.complete();
@@ -71,6 +76,7 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.cancelAutomaticLookup();
     this.isCancellationPending = true;
     this.cancellationError = null;
 
@@ -92,6 +98,7 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
   }
 
   private prepareForLookup(privateToken: string): void {
+    this.stopPolling();
     this.cancellationSubscription?.unsubscribe();
     this.cancellationSubscription = null;
     this.clearPrivateState();
@@ -111,12 +118,15 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
     }
   }
 
-  private handleLookupResult(result: PrivateStatusResult): void {
+  private handleInitialLookupResult(result: PrivateStatusResult): void {
     this.isLookupPending = false;
 
     if (result.kind === 'active') {
       this.activeStatus = result;
       this.activeToken = this.lookupToken;
+      if (this.activeToken !== null) {
+        this.startPolling(this.activeToken);
+      }
       return;
     }
 
@@ -134,6 +144,69 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
     this.lookupError = UNEXPECTED_ERROR_MESSAGE;
   }
 
+  private startPolling(privateToken: string): void {
+    this.pollingTimerSubscription = timer(30_000, 30_000)
+      .pipe(takeUntil(this.destroyed))
+      .subscribe(() => this.poll(privateToken));
+  }
+
+  private poll(privateToken: string): void {
+    if (
+      this.activeStatus === null ||
+      this.activeToken !== privateToken ||
+      this.isAutomaticLookupPending ||
+      this.isCancellationPending
+    ) {
+      return;
+    }
+
+    this.isAutomaticLookupPending = true;
+    this.automaticLookupSubscription = this.lookup(privateToken).subscribe((result) =>
+      this.handleAutomaticLookupResult(result)
+    );
+  }
+
+  private handleAutomaticLookupResult(result: PrivateStatusResult): void {
+    this.isAutomaticLookupPending = false;
+
+    if (result.kind === 'active') {
+      this.activeStatus = result;
+      this.lookupError = null;
+      return;
+    }
+
+    if (result.kind === 'resolved') {
+      this.stopPolling();
+      this.activeStatus = null;
+      this.activeToken = null;
+      this.lookupError = null;
+      this.cancellationError = null;
+      this.resolvedStatus = result;
+      return;
+    }
+
+    if (result.kind === 'not-found') {
+      this.stopPolling();
+      this.clearPrivateState();
+      void this.router.navigateByUrl('/');
+      return;
+    }
+
+    this.lookupError = UNEXPECTED_ERROR_MESSAGE;
+  }
+
+  private cancelAutomaticLookup(): void {
+    this.automaticLookupSubscription?.unsubscribe();
+    this.automaticLookupSubscription = null;
+    this.isAutomaticLookupPending = false;
+  }
+
+  private stopPolling(): void {
+    this.pollingTimerSubscription?.unsubscribe();
+    this.pollingTimerSubscription = null;
+    this.cancelAutomaticLookup();
+  }
+
   private handleCancellationResult(
     result: CancelWaitlistEntryResult,
     active: ActivePrivateStatusView
@@ -141,6 +214,7 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
     this.isCancellationPending = false;
 
     if (result.kind === 'cancelled') {
+      this.stopPolling();
       this.activeStatus = null;
       this.activeToken = null;
       this.cancellationError = null;
@@ -153,6 +227,7 @@ export class PrivateStatusComponent implements OnInit, OnDestroy {
     }
 
     if (result.kind === 'not-found') {
+      this.stopPolling();
       this.clearPrivateState();
       void this.router.navigateByUrl('/');
       return;
