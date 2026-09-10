@@ -1,0 +1,49 @@
+:host {
+  display: block;
+  min-width: 0;
+  min-height: 100vh;
+  color: #202124;
+  font-family: Arial, sans-serif;
+}
+
+.app-shell {
+  display: flex;
+  min-width: 0;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+header,
+main,
+footer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+
+header {
+  background: #254441;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+main {
+  flex: 1;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+footer {
+  border-top: 1px solid #d8dcdb;
+  text-align: center;
+}
+
+@media (min-width: 48rem) {
+  header,
+  main,
+  footer {
+    padding: 1.5rem 2rem;
+  }
+}

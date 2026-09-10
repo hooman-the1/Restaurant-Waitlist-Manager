@@ -1,27 +1,31 @@
+import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
+
 import { AppComponent } from './app.component';
 
 describe('AppComponent', () => {
-  beforeEach(() => TestBed.configureTestingModule({
-    imports: [AppComponent]
-  }));
+  beforeEach(() =>
+    TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideRouter([])]
+    })
+  );
 
-  it('should create the app', () => {
+  it('renders the shared semantic shell', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app).toBeTruthy();
-  });
 
-  it(`should have the 'front' title`, () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('front');
-  });
-
-  it('should render title', () => {
-    const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.content span')?.textContent).toContain('front app is running!');
+
+    const element = fixture.nativeElement as HTMLElement;
+    expect(element.querySelector('header')?.textContent?.trim()).toBe(
+      'Restaurant Waitlist Manager'
+    );
+    expect(element.querySelectorAll('main').length).toBe(1);
+    expect(element.querySelector('main router-outlet')).not.toBeNull();
+    expect(element.querySelector('footer')?.textContent?.trim()).toBe(
+      'Restaurant Waitlist Manager'
+    );
+    expect(element.querySelector('header a, header button')).toBeNull();
+    expect(element.querySelector('footer')?.children.length).toBe(0);
   });
 });
