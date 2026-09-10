@@ -1,19 +1,28 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { of } from 'rxjs';
 
 import { routes } from './app.routes';
+import { RESTAURANT_ACCOUNT_SERVICE, RestaurantAccountService } from './service-boundary';
 
 describe('application routes', () => {
   let harness: RouterTestingHarness;
 
   beforeEach(async () => {
-    TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
+    const accountService: Pick<RestaurantAccountService, 'signup'> = {
+      signup: () => of({ kind: 'success' })
+    };
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter(routes),
+        { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService }
+      ]
+    });
     harness = await RouterTestingHarness.create();
   });
 
   [
-    ['/signup', 'Sign Up'],
     ['/verify/verification-token', 'Verify Email'],
     ['/dashboard', 'Restaurant Dashboard'],
     ['/restaurants/cafe-example', 'Join Waitlist'],
@@ -26,6 +35,15 @@ describe('application routes', () => {
         heading
       );
     });
+  });
+
+  it('maps /signup to the restaurant signup form', async () => {
+    await harness.navigateByUrl('/signup');
+
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Create restaurant account'
+    );
+    expect(harness.routeNativeElement?.querySelector('form')).not.toBeNull();
   });
 
   ['/', '/unknown', '/verify', '/restaurants', '/status'].forEach((url) => {

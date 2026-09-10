@@ -1,0 +1,49 @@
+<section class="signup-page">
+  <h1>Create restaurant account</h1>
+
+  <p *ngIf="isSuccessful" class="confirmation">
+    Account created. Open the verification link to continue.
+  </p>
+
+  <form *ngIf="!isSuccessful" novalidate (ngSubmit)="submit()">
+    <div class="form-field">
+      <label for="restaurant-name">Restaurant name</label>
+      <input
+        id="restaurant-name"
+        name="restaurantName"
+        type="text"
+        autocomplete="organization"
+        [(ngModel)]="restaurantName"
+      />
+    </div>
+
+    <div class="form-field">
+      <label for="signup-email">Email</label>
+      <input
+        id="signup-email"
+        name="email"
+        type="text"
+        inputmode="email"
+        autocomplete="email"
+        [(ngModel)]="email"
+      />
+    </div>
+
+    <div class="form-field">
+      <label for="signup-password">Password</label>
+      <input
+        id="signup-password"
+        name="password"
+        type="password"
+        autocomplete="new-password"
+        [(ngModel)]="password"
+      />
+    </div>
+
+    <p *ngIf="errorMessage" class="form-error" role="alert">{{ errorMessage }}</p>
+
+    <button type="submit" [disabled]="isPending">
+      {{ isPending ? 'Signing up…' : 'Sign up' }}
+    </button>
+  </form>
+</section>

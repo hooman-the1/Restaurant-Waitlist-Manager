@@ -2,12 +2,12 @@ import { Routes } from '@angular/router';
 
 import { NotFoundComponent } from './not-found.component';
 import { PlaceholderPageComponent } from './placeholder-page.component';
+import { RestaurantSignupComponent } from './restaurant-signup.component';
 
 export const routes: Routes = [
   {
     path: 'signup',
-    component: PlaceholderPageComponent,
-    data: { heading: 'Sign Up' }
+    component: RestaurantSignupComponent
   },
   {
     path: 'verify/:token',
