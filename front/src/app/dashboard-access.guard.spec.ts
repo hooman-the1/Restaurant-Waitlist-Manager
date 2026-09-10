@@ -20,11 +20,14 @@ import { DashboardAccessResult } from './api-contracts';
 import { routes } from './app.routes';
 import {
   RESTAURANT_ACCOUNT_SERVICE,
-  RestaurantAccountService
+  RESTAURANT_DASHBOARD_SERVICE,
+  RestaurantAccountService,
+  RestaurantDashboardService
 } from './service-boundary';
 
 describe('restaurant dashboard access route guard', () => {
   let accountService: jasmine.SpyObj<RestaurantAccountService>;
+  let dashboardService: jasmine.SpyObj<RestaurantDashboardService>;
   let harness: RouterTestingHarness;
   let router: Router;
 
@@ -35,12 +38,25 @@ describe('restaurant dashboard access route guard', () => {
       'checkDashboardAccess'
     ]);
     accountService.checkDashboardAccess.and.returnValue(of({ kind: 'allowed' }));
+    dashboardService = jasmine.createSpyObj('RestaurantDashboardService', [
+      'loadDashboard',
+      'resolveEntry'
+    ]);
+    dashboardService.loadDashboard.and.returnValue(of({
+      kind: 'success',
+      dashboard: {
+        restaurantName: 'Guard Test Restaurant',
+        activeEntries: [],
+        resolvedToday: []
+      }
+    }));
 
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
         provideLocationMocks(),
-        { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService }
+        { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService },
+        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService }
       ]
     });
     harness = await RouterTestingHarness.create();
@@ -71,7 +87,7 @@ describe('restaurant dashboard access route guard', () => {
 
     expect(accountService.checkDashboardAccess).toHaveBeenCalledTimes(1);
     expect(router.url).not.toBe('/dashboard');
-    expect(harness.routeNativeElement?.textContent).not.toContain('Restaurant Dashboard');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Guard Test Restaurant');
 
     access.next({ kind: 'allowed' });
     access.complete();
@@ -82,7 +98,9 @@ describe('restaurant dashboard access route guard', () => {
     await harness.navigateByUrl('/dashboard');
 
     expect(router.url).toBe('/dashboard');
-    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Restaurant Dashboard');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Guard Test Restaurant'
+    );
   });
 
   [
@@ -109,7 +127,7 @@ describe('restaurant dashboard access route guard', () => {
         'Something went wrong. Please try again.'
       );
       expect(harness.routeNativeElement?.textContent).not.toContain(
-        'Restaurant Dashboard'
+        'Guard Test Restaurant'
       );
     });
   });
@@ -150,7 +168,9 @@ describe('restaurant dashboard access route guard', () => {
 
     expect(accountService.checkDashboardAccess).toHaveBeenCalledTimes(2);
     expect(router.url).toBe('/dashboard');
-    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Restaurant Dashboard');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Guard Test Restaurant'
+    );
   });
 
   it('performs a fresh check when browser history returns to the dashboard', async () => {
@@ -186,7 +206,9 @@ describe('restaurant dashboard access route guard', () => {
     expect(accountService.verify).toHaveBeenCalledOnceWith({ token: 'exact-token' });
     expect(accountService.checkDashboardAccess).toHaveBeenCalledTimes(1);
     expect(router.url).toBe('/dashboard');
-    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Restaurant Dashboard');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Guard Test Restaurant'
+    );
   });
 
   it('cancels a superseded check and isolates its late result and error', async () => {
@@ -218,7 +240,7 @@ describe('restaurant dashboard access route guard', () => {
       'Create restaurant account'
     );
     expect(harness.routeNativeElement?.textContent).not.toContain(
-      'Restaurant Dashboard'
+      'Guard Test Restaurant'
     );
     expect(harness.routeNativeElement?.textContent).not.toContain(
       'late private transport detail'

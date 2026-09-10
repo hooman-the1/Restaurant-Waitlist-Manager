@@ -3,6 +3,7 @@ import { CanMatchFn, Routes } from '@angular/router';
 import { canAccessRestaurantDashboard } from './dashboard-access.guard';
 import { NotFoundComponent } from './not-found.component';
 import { PlaceholderPageComponent } from './placeholder-page.component';
+import { RestaurantDashboardComponent } from './restaurant-dashboard.component';
 import { RestaurantSignupComponent } from './restaurant-signup.component';
 import { VerificationCallbackComponent } from './verification-callback.component';
 
@@ -21,9 +22,8 @@ export const routes: Routes = [
   },
   {
     path: 'dashboard',
-    component: PlaceholderPageComponent,
+    component: RestaurantDashboardComponent,
     canActivate: [canAccessRestaurantDashboard],
-    data: { heading: 'Restaurant Dashboard' }
   },
   {
     path: 'restaurants/:slug',

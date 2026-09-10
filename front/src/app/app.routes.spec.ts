@@ -3,12 +3,19 @@ import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { NEVER, of } from 'rxjs';
 
+import { DashboardLoadResult } from './api-contracts';
 import { routes } from './app.routes';
-import { RESTAURANT_ACCOUNT_SERVICE, RestaurantAccountService } from './service-boundary';
+import {
+  RESTAURANT_ACCOUNT_SERVICE,
+  RESTAURANT_DASHBOARD_SERVICE,
+  RestaurantAccountService,
+  RestaurantDashboardService
+} from './service-boundary';
 
 describe('application routes', () => {
   let harness: RouterTestingHarness;
   let accountService: jasmine.SpyObj<RestaurantAccountService>;
+  let dashboardService: jasmine.SpyObj<RestaurantDashboardService>;
 
   beforeEach(async () => {
     accountService = jasmine.createSpyObj('RestaurantAccountService', [
@@ -19,17 +26,29 @@ describe('application routes', () => {
     accountService.signup.and.returnValue(of({ kind: 'success' }));
     accountService.verify.and.returnValue(NEVER);
     accountService.checkDashboardAccess.and.returnValue(of({ kind: 'allowed' }));
+    dashboardService = jasmine.createSpyObj('RestaurantDashboardService', [
+      'loadDashboard',
+      'resolveEntry'
+    ]);
+    dashboardService.loadDashboard.and.returnValue(of({
+      kind: 'success',
+      dashboard: {
+        restaurantName: 'Route Test Restaurant',
+        activeEntries: [],
+        resolvedToday: []
+      }
+    }));
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
-        { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService }
+        { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService },
+        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService }
       ]
     });
     harness = await RouterTestingHarness.create();
   });
 
   [
-    ['/dashboard', 'Restaurant Dashboard'],
     ['/restaurants/cafe-example', 'Join Waitlist'],
     ['/status/private-status-token', 'Customer Status']
   ].forEach(([url, heading]) => {
@@ -40,6 +59,29 @@ describe('application routes', () => {
         heading
       );
     });
+  });
+
+  it('maps the guarded dashboard route to the queue view', async () => {
+    await harness.navigateByUrl('/dashboard');
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Route Test Restaurant'
+    );
+    expect(dashboardService.loadDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the existing root Not Found fallback when dashboard authorization is lost after activation', async () => {
+    dashboardService.loadDashboard.and.returnValue(of({
+      kind: 'unauthorized'
+    } as DashboardLoadResult));
+
+    await harness.navigateByUrl('/dashboard');
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Not Found');
   });
 
   it('passes Angular\'s exact decoded callback token to verification once', async () => {

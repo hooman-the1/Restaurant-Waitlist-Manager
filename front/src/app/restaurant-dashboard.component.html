@@ -1,0 +1,39 @@
+<button type="button" (click)="refresh()" [disabled]="state === 'loading'">
+  Refresh
+</button>
+
+<p *ngIf="state === 'loading'">Loading…</p>
+<p *ngIf="state === 'error'">{{ unexpectedErrorMessage }}</p>
+
+<ng-container *ngIf="state === 'success' && dashboard as currentDashboard">
+  <h1>{{ currentDashboard.restaurantName }}</h1>
+
+  <section data-section="active" aria-labelledby="active-heading">
+    <h2 id="active-heading">Active</h2>
+
+    <p *ngIf="currentDashboard.activeEntries.length === 0">No customers waiting</p>
+    <ol *ngIf="currentDashboard.activeEntries.length > 0">
+      <li *ngFor="let entry of currentDashboard.activeEntries">
+        <span data-label="Position">#{{ entry.position }}</span>
+        <span data-label="Customer">{{ entry.customerName }}</span>
+        <span data-label="Phone">{{ entry.phone }}</span>
+        <span data-label="Party size">{{ entry.partySize }}</span>
+      </li>
+    </ol>
+  </section>
+
+  <section data-section="resolved" aria-labelledby="resolved-heading">
+    <h2 id="resolved-heading">Resolved Today</h2>
+
+    <p *ngIf="currentDashboard.resolvedToday.length === 0">
+      No resolved entries today
+    </p>
+    <ul *ngIf="currentDashboard.resolvedToday.length > 0">
+      <li *ngFor="let entry of currentDashboard.resolvedToday">
+        <span data-label="Customer">{{ entry.customerName }}</span>
+        <span data-label="Party size">{{ entry.partySize }}</span>
+        <span data-label="Status">{{ statusLabel(entry.finalStatus) }}</span>
+      </li>
+    </ul>
+  </section>
+</ng-container>
