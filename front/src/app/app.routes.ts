@@ -1,8 +1,12 @@
-import { Routes } from '@angular/router';
+import { CanMatchFn, Routes } from '@angular/router';
 
 import { NotFoundComponent } from './not-found.component';
 import { PlaceholderPageComponent } from './placeholder-page.component';
 import { RestaurantSignupComponent } from './restaurant-signup.component';
+import { VerificationCallbackComponent } from './verification-callback.component';
+
+const hasNonEmptyVerificationToken: CanMatchFn = (_route, segments) =>
+  segments.length === 2 && segments[1].path.length > 0;
 
 export const routes: Routes = [
   {
@@ -11,8 +15,8 @@ export const routes: Routes = [
   },
   {
     path: 'verify/:token',
-    component: PlaceholderPageComponent,
-    data: { heading: 'Verify Email' }
+    component: VerificationCallbackComponent,
+    canMatch: [hasNonEmptyVerificationToken]
   },
   {
     path: 'dashboard',
