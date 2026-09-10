@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { appConfig } from './app.config';
 import {
   DUPLICATE_PHONE_MESSAGE,
+  FinalStatus,
   JoinWaitlistInput,
   UNEXPECTED_ERROR_MESSAGE
 } from './api-contracts';
@@ -11,7 +12,7 @@ import {
   MockCustomerWaitlistService,
   MockCustomerWaitlistTestOptions
 } from './mock-customer-waitlist.service';
-import { CUSTOMER_WAITLIST_SERVICE } from './service-boundary';
+import { CUSTOMER_WAITLIST_SERVICE, CustomerWaitlistService } from './service-boundary';
 
 describe('MockCustomerWaitlistService', () => {
   const validJoin: JoinWaitlistInput = {
@@ -42,6 +43,281 @@ describe('MockCustomerWaitlistService', () => {
 
     expect(service instanceof MockCustomerWaitlistService).toBeTrue();
   });
+
+  it('loads the privacy-minimal active status created through the shared public service', async () => {
+    const concreteService = isolatedService();
+    const service: CustomerWaitlistService = concreteService;
+    await firstValueFrom(service.lookupPublicRestaurant({ restaurantSlug: 'first' }));
+    const joined = await firstValueFrom(service.joinWaitlist(validJoin));
+
+    expect(joined.kind).toBe('success');
+    if (joined.kind === 'success') {
+      const result = await firstValueFrom(
+        service.loadPrivateStatus({ privateToken: joined.privateStatusToken })
+      );
+      expect(result).toEqual({
+        kind: 'active',
+        restaurantName: 'First Restaurant',
+        position: 1
+      });
+      expect(Object.keys(result)).toEqual(['kind', 'restaurantName', 'position']);
+      expect(JSON.stringify(result)).not.toContain(validJoin.customerName);
+      expect(JSON.stringify(result)).not.toContain(validJoin.phone);
+      expect(JSON.stringify(result)).not.toContain(joined.privateStatusToken);
+    }
+  });
+
+  it('cancels an active entry once and keeps its token as a resolved lookup', async () => {
+    const service = isolatedService();
+    await select(service);
+    const joined = await join(service);
+
+    expect(joined.kind).toBe('success');
+    if (joined.kind === 'success') {
+      expect(
+        await firstValueFrom(service.cancelEntry({ privateToken: joined.privateStatusToken }))
+      ).toEqual({ kind: 'cancelled' });
+      expect(
+        await firstValueFrom(service.loadPrivateStatus({ privateToken: joined.privateStatusToken }))
+      ).toEqual({
+        kind: 'resolved',
+        restaurantName: 'First Restaurant',
+        finalStatus: 'cancelled'
+      });
+      expect(
+        await firstValueFrom(service.cancelEntry({ privateToken: joined.privateStatusToken }))
+      ).toEqual({ kind: 'not-found' });
+    }
+  });
+
+  it('calculates gapless active-only FIFO positions within each restaurant', async () => {
+    const service: CustomerWaitlistService = isolatedService({
+      restaurants: [
+        { slug: 'first', restaurantName: 'First Restaurant' },
+        { slug: 'second', restaurantName: 'Second Restaurant' }
+      ],
+      entries: [
+        {
+          restaurantSlug: 'first', customerName: 'Resolved first', phone: '100',
+          partySize: 30, status: 'seated', privateStatusToken: 'resolved-before'
+        },
+        {
+          restaurantSlug: 'first', customerName: 'Active first', phone: '101',
+          partySize: 9, status: 'active', privateStatusToken: 'active-first'
+        },
+        {
+          restaurantSlug: 'second', customerName: 'Other', phone: '101',
+          partySize: 1, status: 'active', privateStatusToken: 'other-active'
+        },
+        {
+          restaurantSlug: 'first', customerName: 'Resolved between', phone: '102',
+          partySize: 1, status: 'no-show', privateStatusToken: 'resolved-between'
+        },
+        {
+          restaurantSlug: 'first', customerName: 'Active second', phone: '103',
+          partySize: 1, status: 'active', privateStatusToken: 'active-second'
+        }
+      ]
+    });
+
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'active-first' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 1 });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'active-second' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 2 });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'other-active' })))
+      .toEqual({ kind: 'active', restaurantName: 'Second Restaurant', position: 1 });
+  });
+
+  (['seated', 'cancelled', 'no-show'] as const).forEach((finalStatus) => {
+    it(`loads an exact privacy-minimal ${finalStatus} result`, async () => {
+      const service: CustomerWaitlistService = isolatedService({
+        entries: [{
+          restaurantSlug: 'first', customerName: 'Private Name', phone: '555-9876',
+          partySize: 12, status: finalStatus, privateStatusToken: `private-${finalStatus}`
+        }]
+      });
+
+      const result = await firstValueFrom(
+        service.loadPrivateStatus({ privateToken: `private-${finalStatus}` })
+      );
+
+      expect(result).toEqual({
+        kind: 'resolved', restaurantName: 'First Restaurant', finalStatus
+      });
+      expect(Object.keys(result)).toEqual(['kind', 'restaurantName', 'finalStatus']);
+      expect(JSON.stringify(result)).not.toContain('Private Name');
+      expect(JSON.stringify(result)).not.toContain('555');
+      expect(JSON.stringify(result)).not.toContain(`private-${finalStatus}`);
+    });
+  });
+
+  ['', ' ', 'malformed/token', 'unknown'].forEach((privateToken) => {
+    it(`returns an exact not-found result without mutation for token ${JSON.stringify(privateToken)}`, async () => {
+      const service = isolatedService({
+        entries: [{
+          restaurantSlug: 'first', customerName: 'Existing', phone: '555-1234',
+          partySize: 2, status: 'active', privateStatusToken: 'known-token'
+        }]
+      });
+      const before = service.getSnapshotForTesting();
+
+      const result = await firstValueFrom(service.loadPrivateStatus({ privateToken }));
+
+      expect(result).toEqual({ kind: 'not-found' });
+      expect(Object.keys(result)).toEqual(['kind']);
+      expect(service.getSnapshotForTesting()).toEqual(before);
+    });
+  });
+
+  (['seated', 'cancelled', 'no-show'] as readonly FinalStatus[]).forEach((status) => {
+    it(`does not cancel an entry already resolved as ${status}`, async () => {
+      const service = isolatedService({
+        entries: [{
+          restaurantSlug: 'first', customerName: 'Resolved', phone: '555-1234',
+          partySize: 2, status, privateStatusToken: 'resolved-token'
+        }]
+      });
+      const before = service.getSnapshotForTesting();
+
+      expect(await firstValueFrom(service.cancelEntry({ privateToken: 'resolved-token' })))
+        .toEqual({ kind: 'not-found' });
+      expect(service.getSnapshotForTesting()).toEqual(before);
+    });
+  });
+
+  it('does not cancel an empty, malformed, or unknown token', async () => {
+    const service = isolatedService();
+    const before = service.getSnapshotForTesting();
+
+    for (const privateToken of ['', 'bad/token', 'unknown']) {
+      expect(await firstValueFrom(service.cancelEntry({ privateToken })))
+        .toEqual({ kind: 'not-found' });
+    }
+    expect(service.getSnapshotForTesting()).toEqual(before);
+  });
+
+  it('recalculates only later positions in the cancelled entry restaurant', async () => {
+    const service: CustomerWaitlistService = isolatedService({
+      restaurants: [
+        { slug: 'first', restaurantName: 'First Restaurant' },
+        { slug: 'second', restaurantName: 'Second Restaurant' }
+      ],
+      entries: [
+        { restaurantSlug: 'first', customerName: 'A', phone: '1', partySize: 1, status: 'active', privateStatusToken: 'a' },
+        { restaurantSlug: 'second', customerName: 'X', phone: '1', partySize: 30, status: 'active', privateStatusToken: 'x' },
+        { restaurantSlug: 'first', customerName: 'B', phone: '2', partySize: 30, status: 'active', privateStatusToken: 'b' },
+        { restaurantSlug: 'first', customerName: 'C', phone: '3', partySize: 1, status: 'active', privateStatusToken: 'c' }
+      ]
+    });
+
+    expect(await firstValueFrom(service.cancelEntry({ privateToken: 'b' })))
+      .toEqual({ kind: 'cancelled' });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'a' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 1 });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'c' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 2 });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'x' })))
+      .toEqual({ kind: 'active', restaurantName: 'Second Restaurant', position: 1 });
+  });
+
+  it('releases only the cancelled phone, rejoins at the end, and renews duplicate rejection', async () => {
+    const service: CustomerWaitlistService = isolatedService({
+      entries: [
+        { restaurantSlug: 'first', customerName: 'Original', phone: '(555) 123-4567', partySize: 2, status: 'active', privateStatusToken: 'old-token' },
+        { restaurantSlug: 'first', customerName: 'Waiting', phone: '555-0000', partySize: 2, status: 'active', privateStatusToken: 'waiting-token' }
+      ],
+      privateTokenGenerator: jasmine.createSpy().and.returnValue('replacement-token')
+    });
+
+    expect(await firstValueFrom(service.cancelEntry({ privateToken: 'old-token' })))
+      .toEqual({ kind: 'cancelled' });
+    await firstValueFrom(service.lookupPublicRestaurant({ restaurantSlug: 'first' }));
+    expect(await firstValueFrom(service.joinWaitlist({
+      customerName: 'Rejoined', phone: '555123 4567', partySize: 4
+    }))).toEqual({ kind: 'success', privateStatusToken: 'replacement-token' });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'old-token' })))
+      .toEqual({ kind: 'resolved', restaurantName: 'First Restaurant', finalStatus: 'cancelled' });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'replacement-token' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 2 });
+
+    const duplicate = await firstValueFrom(service.joinWaitlist({
+      customerName: 'Again', phone: '555-123-4567', partySize: 1
+    }));
+    expect(duplicate).toEqual({ kind: 'duplicate-phone', message: DUPLICATE_PHONE_MESSAGE });
+    expect(JSON.stringify(duplicate)).not.toContain('old-token');
+    expect(JSON.stringify(duplicate)).not.toContain('replacement-token');
+  });
+
+  it('converts private lookup faults to a generic result without state changes', async () => {
+    const service = isolatedService({
+      entries: [{
+        restaurantSlug: 'first', customerName: 'Secret', phone: '555-1234',
+        partySize: 2, status: 'active', privateStatusToken: 'known-token'
+      }],
+      beforePrivateStatusLookup: () => { throw new Error('sensitive lookup detail'); }
+    });
+    const before = service.getSnapshotForTesting();
+
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'known-token' })))
+      .toEqual({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE });
+    expect(service.getSnapshotForTesting()).toEqual(before);
+  });
+
+  it('converts cancellation faults atomically without releasing the phone or changing FIFO', async () => {
+    const service = isolatedService({
+      entries: [
+        { restaurantSlug: 'first', customerName: 'Target', phone: '555-1234', partySize: 2, status: 'active', privateStatusToken: 'target-token' },
+        { restaurantSlug: 'first', customerName: 'Later', phone: '555-0000', partySize: 2, status: 'active', privateStatusToken: 'later-token' }
+      ],
+      beforeCancelCommit: () => { throw new Error('sensitive cancellation detail'); }
+    });
+    const before = service.getSnapshotForTesting();
+
+    expect(await firstValueFrom(service.cancelEntry({ privateToken: 'target-token' })))
+      .toEqual({ kind: 'unexpected', message: UNEXPECTED_ERROR_MESSAGE });
+    expect(service.getSnapshotForTesting()).toEqual(before);
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'target-token' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 1 });
+    expect(await firstValueFrom(service.loadPrivateStatus({ privateToken: 'later-token' })))
+      .toEqual({ kind: 'active', restaurantName: 'First Restaurant', position: 2 });
+    await select(service);
+    expect(await join(service)).toEqual({
+      kind: 'duplicate-phone', message: DUPLICATE_PHONE_MESSAGE
+    });
+  });
+
+  it('performs each private operation only upon each subscription', fakeAsync(() => {
+    const lookupHook = jasmine.createSpy();
+    const service = isolatedService({
+      entries: [{
+        restaurantSlug: 'first', customerName: 'Target', phone: '555-1234',
+        partySize: 2, status: 'active', privateStatusToken: 'target-token'
+      }],
+      beforePrivateStatusLookup: lookupHook
+    });
+    const statusResults: string[] = [];
+    const status$ = service.loadPrivateStatus({ privateToken: 'target-token' });
+
+    expect(lookupHook).not.toHaveBeenCalled();
+    status$.subscribe((result) => statusResults.push(result.kind));
+    status$.subscribe((result) => statusResults.push(result.kind));
+    expect(lookupHook).toHaveBeenCalledTimes(2);
+    expect(statusResults).toEqual([]);
+    flushMicrotasks();
+    expect(lookupHook).toHaveBeenCalledTimes(2);
+    expect(statusResults).toEqual(['active', 'active']);
+
+    const cancellationResults: string[] = [];
+    const cancellation$ = service.cancelEntry({ privateToken: 'target-token' });
+    expect(service.getSnapshotForTesting().entries[0].status).toBe('active');
+    cancellation$.subscribe((result) => cancellationResults.push(result.kind));
+    cancellation$.subscribe((result) => cancellationResults.push(result.kind));
+    expect(service.getSnapshotForTesting().entries[0].status).toBe('cancelled');
+    expect(cancellationResults).toEqual([]);
+    flushMicrotasks();
+    expect(cancellationResults).toEqual(['cancelled', 'not-found']);
+    expect(service.getSnapshotForTesting().entries[0].status).toBe('cancelled');
+  }));
 
   it('looks up only the exact default public restaurant and exposes only its name', async () => {
     const service = MockCustomerWaitlistService.createDefault();

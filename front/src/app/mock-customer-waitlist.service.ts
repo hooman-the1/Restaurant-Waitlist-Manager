@@ -22,8 +22,11 @@ export interface MockRestaurantSeed {
 
 export interface MockCustomerWaitlistTestOptions {
   readonly restaurants?: readonly MockRestaurantSeed[];
+  readonly entries?: readonly MockWaitlistEntryTestSeed[];
   readonly privateTokenGenerator?: () => string;
   readonly beforeLookup?: (restaurantSlug: string) => void;
+  readonly beforePrivateStatusLookup?: (privateStatusToken: string) => void;
+  readonly beforeCancelCommit?: (privateStatusToken: string) => void;
 }
 
 type MockEntryStatus = 'active' | FinalStatus;
@@ -37,6 +40,15 @@ interface MockWaitlistEntry {
   readonly partySize: number;
   readonly status: MockEntryStatus;
   readonly insertionOrder: number;
+  readonly privateStatusToken: string;
+}
+
+export interface MockWaitlistEntryTestSeed {
+  readonly restaurantSlug: string;
+  readonly customerName: string;
+  readonly phone: string;
+  readonly partySize: number;
+  readonly status: MockEntryStatus;
   readonly privateStatusToken: string;
 }
 
@@ -92,6 +104,56 @@ class MockWaitlistState {
     this.nextInsertionOrder += 1;
   }
 
+  privateStatus(privateStatusToken: string): PrivateStatusResult {
+    const entry = this.entries.find(
+      (candidate) => candidate.privateStatusToken === privateStatusToken
+    );
+    if (!entry) {
+      return { kind: 'not-found' };
+    }
+
+    if (entry.status !== 'active') {
+      return {
+        kind: 'resolved',
+        restaurantName: entry.restaurantName,
+        finalStatus: entry.status
+      };
+    }
+
+    const earlierActiveEntries = this.entries.filter(
+      (candidate) =>
+        candidate.restaurantSlug === entry.restaurantSlug &&
+        candidate.status === 'active' &&
+        candidate.insertionOrder < entry.insertionOrder
+    ).length;
+    return {
+      kind: 'active',
+      restaurantName: entry.restaurantName,
+      position: earlierActiveEntries + 1
+    };
+  }
+
+  cancelActiveEntry(
+    privateStatusToken: string,
+    beforeCommit: (privateStatusToken: string) => void
+  ): boolean {
+    const entryIndex = this.entries.findIndex(
+      (entry) =>
+        entry.privateStatusToken === privateStatusToken && entry.status === 'active'
+    );
+    if (entryIndex < 0) {
+      return false;
+    }
+
+    const cancelledEntry: MockWaitlistEntry = {
+      ...this.entries[entryIndex],
+      status: 'cancelled'
+    };
+    beforeCommit(privateStatusToken);
+    this.entries[entryIndex] = cancelledEntry;
+    return true;
+  }
+
   snapshot(selectedRestaurantSlug: string | undefined): MockWaitlistSnapshot {
     return {
       selectedRestaurantSlug,
@@ -106,7 +168,9 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
   private constructor(
     private readonly state: MockWaitlistState,
     private readonly privateTokenGenerator: () => string,
-    private readonly beforeLookup: (restaurantSlug: string) => void
+    private readonly beforeLookup: (restaurantSlug: string) => void,
+    private readonly beforePrivateStatusLookup: (privateStatusToken: string) => void,
+    private readonly beforeCancelCommit: (privateStatusToken: string) => void
   ) {}
 
   static createDefault(): MockCustomerWaitlistService {
@@ -115,6 +179,8 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
         { slug: 'demo-restaurant', restaurantName: 'Demo Restaurant' }
       ]),
       () => crypto.randomUUID(),
+      () => undefined,
+      () => undefined,
       () => undefined
     );
   }
@@ -122,10 +188,25 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
   static createForTesting(
     options: MockCustomerWaitlistTestOptions = {}
   ): MockCustomerWaitlistService {
+    const state = new MockWaitlistState(options.restaurants ?? []);
+    options.entries?.forEach((entry) => {
+      const restaurant = state.restaurantBySlug(entry.restaurantSlug);
+      if (!restaurant) {
+        throw new Error('A test entry must reference a seeded restaurant.');
+      }
+      state.appendEntry({
+        ...entry,
+        restaurantName: restaurant.restaurantName,
+        comparisonPhone: entry.phone.replace(/[ ()-]/g, '')
+      });
+    });
+
     return new MockCustomerWaitlistService(
-      new MockWaitlistState(options.restaurants ?? []),
+      state,
       options.privateTokenGenerator ?? (() => crypto.randomUUID()),
-      options.beforeLookup ?? (() => undefined)
+      options.beforeLookup ?? (() => undefined),
+      options.beforePrivateStatusLookup ?? (() => undefined),
+      options.beforeCancelCommit ?? (() => undefined)
     );
   }
 
@@ -140,15 +221,22 @@ export class MockCustomerWaitlistService implements CustomerWaitlistService {
   }
 
   loadPrivateStatus(
-    _input: PrivateStatusLookupInput
+    input: PrivateStatusLookupInput
   ): Observable<PrivateStatusResult> {
-    return this.oneAsyncResult(() => ({ kind: 'not-found' }));
+    return this.oneAsyncResult(() => {
+      this.beforePrivateStatusLookup(input.privateToken);
+      return this.state.privateStatus(input.privateToken);
+    });
   }
 
   cancelEntry(
-    _input: CancelWaitlistEntryInput
+    input: CancelWaitlistEntryInput
   ): Observable<CancelWaitlistEntryResult> {
-    return this.oneAsyncResult(() => ({ kind: 'not-found' }));
+    return this.oneAsyncResult(() =>
+      this.state.cancelActiveEntry(input.privateToken, this.beforeCancelCommit)
+        ? { kind: 'cancelled' }
+        : { kind: 'not-found' }
+    );
   }
 
   /** Returns detached copies for focused tests; mutations cannot alter service state. */
