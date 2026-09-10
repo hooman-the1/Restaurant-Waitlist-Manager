@@ -9,6 +9,7 @@ import {
   filter,
   firstValueFrom,
   Observable,
+  NEVER,
   of,
   Subject,
   Subscriber,
@@ -19,8 +20,10 @@ import {
 import { DashboardAccessResult } from './api-contracts';
 import { routes } from './app.routes';
 import {
+  CUSTOMER_WAITLIST_SERVICE,
   RESTAURANT_ACCOUNT_SERVICE,
   RESTAURANT_DASHBOARD_SERVICE,
+  CustomerWaitlistService,
   RestaurantAccountService,
   RestaurantDashboardService
 } from './service-boundary';
@@ -28,6 +31,7 @@ import {
 describe('restaurant dashboard access route guard', () => {
   let accountService: jasmine.SpyObj<RestaurantAccountService>;
   let dashboardService: jasmine.SpyObj<RestaurantDashboardService>;
+  let customerWaitlistService: jasmine.SpyObj<CustomerWaitlistService>;
   let harness: RouterTestingHarness;
   let router: Router;
 
@@ -50,13 +54,19 @@ describe('restaurant dashboard access route guard', () => {
         resolvedToday: []
       }
     }));
+    customerWaitlistService = jasmine.createSpyObj<CustomerWaitlistService>(
+      'CustomerWaitlistService',
+      ['lookupPublicRestaurant', 'joinWaitlist', 'loadPrivateStatus', 'cancelEntry']
+    );
+    customerWaitlistService.loadPrivateStatus.and.returnValue(NEVER);
 
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
         provideLocationMocks(),
         { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService },
-        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService }
+        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService },
+        { provide: CUSTOMER_WAITLIST_SERVICE, useValue: customerWaitlistService }
       ]
     });
     harness = await RouterTestingHarness.create();

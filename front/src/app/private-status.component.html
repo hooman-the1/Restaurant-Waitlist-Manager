@@ -1,0 +1,21 @@
+<p *ngIf="isLookupPending">Loading…</p>
+
+<p *ngIf="lookupError" role="alert">{{ lookupError }}</p>
+
+<section *ngIf="activeStatus as active">
+  <h1>{{ active.restaurantName }}</h1>
+  <p data-position>#{{ active.position }}</p>
+  <p *ngIf="cancellationError" role="alert">{{ cancellationError }}</p>
+  <button type="button" [disabled]="isCancellationPending" (click)="cancel()">
+    {{ isCancellationPending ? 'Cancelling…' : 'Cancel' }}
+  </button>
+</section>
+
+<section *ngIf="resolvedStatus as resolved">
+  <h1>{{ resolved.restaurantName }}</h1>
+  <p data-final-status [ngSwitch]="resolved.finalStatus">
+    <ng-container *ngSwitchCase="'seated'">Seated</ng-container>
+    <ng-container *ngSwitchCase="'cancelled'">Cancelled</ng-container>
+    <ng-container *ngSwitchCase="'no-show'">No-show</ng-container>
+  </p>
+</section>

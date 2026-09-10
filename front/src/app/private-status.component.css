@@ -1,0 +1,14 @@
+:host {
+  display: block;
+}
+
+section {
+  display: grid;
+  gap: 1rem;
+  justify-items: start;
+}
+
+h1,
+p {
+  margin: 0;
+}

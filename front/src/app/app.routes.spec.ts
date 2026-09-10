@@ -51,6 +51,7 @@ describe('application routes', () => {
       kind: 'success',
       restaurant: { restaurantName: 'Route Test Restaurant' }
     }));
+    customerWaitlistService.loadPrivateStatus.and.returnValue(NEVER);
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -74,12 +75,14 @@ describe('application routes', () => {
     });
   });
 
-  it('keeps the customer status route as its placeholder', async () => {
-    await harness.navigateByUrl('/status/private-status-token');
+  it('maps the exact decoded customer token to the private status page once', async () => {
+    await harness.navigateByUrl('/status/Opaque%20Token%2BCase');
+    harness.detectChanges();
 
-    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
-      'Customer Status'
-    );
+    expect(harness.routeNativeElement?.textContent?.trim()).toBe('Loading…');
+    expect(customerWaitlistService.loadPrivateStatus).toHaveBeenCalledOnceWith({
+      privateToken: 'Opaque Token+Case'
+    });
   });
 
   it('maps the guarded dashboard route to the queue view', async () => {
@@ -124,7 +127,7 @@ describe('application routes', () => {
     expect(harness.routeNativeElement?.querySelector('form')).not.toBeNull();
   });
 
-  ['/', '/unknown', '/verify', '/verify/', '/restaurants', '/status'].forEach((url) => {
+  ['/', '/unknown', '/verify', '/verify/', '/restaurants', '/status', '/status/'].forEach((url) => {
     it(`renders Not Found for ${url}`, async () => {
       await harness.navigateByUrl(url);
 
@@ -132,6 +135,7 @@ describe('application routes', () => {
       expect(routeElement?.textContent?.trim()).toBe('Not Found');
       expect(routeElement?.querySelector('h1')).toBeNull();
       expect(accountService.verify).not.toHaveBeenCalled();
+      expect(customerWaitlistService.loadPrivateStatus).not.toHaveBeenCalled();
     });
   });
 
