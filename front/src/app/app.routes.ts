@@ -1,5 +1,6 @@
 import { CanMatchFn, Routes } from '@angular/router';
 
+import { canAccessRestaurantDashboard } from './dashboard-access.guard';
 import { NotFoundComponent } from './not-found.component';
 import { PlaceholderPageComponent } from './placeholder-page.component';
 import { RestaurantSignupComponent } from './restaurant-signup.component';
@@ -21,6 +22,7 @@ export const routes: Routes = [
   {
     path: 'dashboard',
     component: PlaceholderPageComponent,
+    canActivate: [canAccessRestaurantDashboard],
     data: { heading: 'Restaurant Dashboard' }
   },
   {
