@@ -6,8 +6,10 @@ import { NEVER, of } from 'rxjs';
 import { DashboardLoadResult } from './api-contracts';
 import { routes } from './app.routes';
 import {
+  CUSTOMER_WAITLIST_SERVICE,
   RESTAURANT_ACCOUNT_SERVICE,
   RESTAURANT_DASHBOARD_SERVICE,
+  CustomerWaitlistService,
   RestaurantAccountService,
   RestaurantDashboardService
 } from './service-boundary';
@@ -16,6 +18,7 @@ describe('application routes', () => {
   let harness: RouterTestingHarness;
   let accountService: jasmine.SpyObj<RestaurantAccountService>;
   let dashboardService: jasmine.SpyObj<RestaurantDashboardService>;
+  let customerWaitlistService: jasmine.SpyObj<CustomerWaitlistService>;
 
   beforeEach(async () => {
     accountService = jasmine.createSpyObj('RestaurantAccountService', [
@@ -38,27 +41,45 @@ describe('application routes', () => {
         resolvedToday: []
       }
     }));
+    customerWaitlistService = jasmine.createSpyObj('CustomerWaitlistService', [
+      'lookupPublicRestaurant',
+      'joinWaitlist',
+      'loadPrivateStatus',
+      'cancelEntry'
+    ]);
+    customerWaitlistService.lookupPublicRestaurant.and.returnValue(of({
+      kind: 'success',
+      restaurant: { restaurantName: 'Route Test Restaurant' }
+    }));
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
         { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: accountService },
-        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService }
+        { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: dashboardService },
+        { provide: CUSTOMER_WAITLIST_SERVICE, useValue: customerWaitlistService }
       ]
     });
     harness = await RouterTestingHarness.create();
   });
 
-  [
-    ['/restaurants/cafe-example', 'Join Waitlist'],
-    ['/status/private-status-token', 'Customer Status']
-  ].forEach(([url, heading]) => {
-    it(`maps ${url} to its placeholder`, async () => {
-      await harness.navigateByUrl(url);
+  it('maps the public restaurant route to its join form', async () => {
+    await harness.navigateByUrl('/restaurants/cafe-example');
 
-      expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
-        heading
-      );
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Route Test Restaurant'
+    );
+    expect(harness.routeNativeElement?.querySelector('form')).not.toBeNull();
+    expect(customerWaitlistService.lookupPublicRestaurant).toHaveBeenCalledOnceWith({
+      restaurantSlug: 'cafe-example'
     });
+  });
+
+  it('keeps the customer status route as its placeholder', async () => {
+    await harness.navigateByUrl('/status/private-status-token');
+
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent?.trim()).toBe(
+      'Customer Status'
+    );
   });
 
   it('maps the guarded dashboard route to the queue view', async () => {

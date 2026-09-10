@@ -178,7 +178,7 @@ describe('restaurant dashboard access route guard', () => {
     router.setUpLocationChangeListener();
     await harness.navigateByUrl('/signup');
     await harness.navigateByUrl('/dashboard');
-    await harness.navigateByUrl('/restaurants/cafe-example');
+    await harness.navigateByUrl('/status/private-token');
 
     const backToDashboard = nextNavigationEnd();
     location.simulateUrlPop('/dashboard');

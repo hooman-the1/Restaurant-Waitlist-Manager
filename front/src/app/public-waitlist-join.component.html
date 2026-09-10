@@ -1,0 +1,51 @@
+<section class="join-page">
+  <p *ngIf="isLookupPending" class="loading">Loading…</p>
+
+  <p *ngIf="lookupError" class="page-error" role="alert">{{ lookupError }}</p>
+
+  <ng-container *ngIf="isAvailable">
+    <h1>{{ restaurantName }}</h1>
+
+    <form novalidate (ngSubmit)="submit()">
+      <div class="form-field">
+        <label for="customer-name">Name</label>
+        <input
+          id="customer-name"
+          name="customerName"
+          type="text"
+          autocomplete="name"
+          [(ngModel)]="customerName"
+        />
+      </div>
+
+      <div class="form-field">
+        <label for="customer-phone">Phone number</label>
+        <input
+          id="customer-phone"
+          name="phone"
+          type="text"
+          inputmode="tel"
+          autocomplete="tel"
+          [(ngModel)]="phone"
+        />
+      </div>
+
+      <div class="form-field">
+        <label for="party-size">Party size</label>
+        <input
+          id="party-size"
+          name="partySize"
+          type="number"
+          inputmode="numeric"
+          [(ngModel)]="partySize"
+        />
+      </div>
+
+      <p *ngIf="formError" class="form-error" role="alert">{{ formError }}</p>
+
+      <button type="submit" [disabled]="isJoinPending">
+        {{ isJoinPending ? 'Joining…' : 'Join waitlist' }}
+      </button>
+    </form>
+  </ng-container>
+</section>

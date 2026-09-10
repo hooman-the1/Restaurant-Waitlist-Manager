@@ -3,6 +3,7 @@ import { CanMatchFn, Routes } from '@angular/router';
 import { canAccessRestaurantDashboard } from './dashboard-access.guard';
 import { NotFoundComponent } from './not-found.component';
 import { PlaceholderPageComponent } from './placeholder-page.component';
+import { PublicWaitlistJoinComponent } from './public-waitlist-join.component';
 import { RestaurantDashboardComponent } from './restaurant-dashboard.component';
 import { RestaurantSignupComponent } from './restaurant-signup.component';
 import { VerificationCallbackComponent } from './verification-callback.component';
@@ -27,8 +28,7 @@ export const routes: Routes = [
   },
   {
     path: 'restaurants/:slug',
-    component: PlaceholderPageComponent,
-    data: { heading: 'Join Waitlist' }
+    component: PublicWaitlistJoinComponent
   },
   {
     path: 'status/:token',
