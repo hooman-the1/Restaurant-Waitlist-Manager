@@ -1,4 +1,4 @@
-<button type="button" (click)="refresh()" [disabled]="state === 'loading'">
+<button type="button" (click)="refresh()" [disabled]="refreshDisabled()">
   Refresh
 </button>
 
@@ -7,17 +7,46 @@
 
 <ng-container *ngIf="state === 'success' && dashboard as currentDashboard">
   <h1>{{ currentDashboard.restaurantName }}</h1>
+  <p *ngIf="actionError" role="alert">{{ unexpectedErrorMessage }}</p>
 
   <section data-section="active" aria-labelledby="active-heading">
     <h2 id="active-heading">Active</h2>
 
     <p *ngIf="currentDashboard.activeEntries.length === 0">No customers waiting</p>
     <ol *ngIf="currentDashboard.activeEntries.length > 0">
-      <li *ngFor="let entry of currentDashboard.activeEntries">
+      <li *ngFor="let entry of currentDashboard.activeEntries; index as index">
         <span data-label="Position">#{{ entry.position }}</span>
         <span data-label="Customer">{{ entry.customerName }}</span>
         <span data-label="Phone">{{ entry.phone }}</span>
         <span data-label="Party size">{{ entry.partySize }}</span>
+        <span class="resolution-control">
+          <label [for]="'resolution-' + index">Resolve {{ entry.customerName }}</label>
+          <select
+            [id]="'resolution-' + index"
+            [disabled]="actionDisabled(entry.actionReference)"
+            (change)="resolveEntry(
+              entry.actionReference,
+              $any($event.target).value,
+              $any($event.target)
+            )"
+          >
+            <option value="" [selected]="selectedResolution(entry.actionReference) === ''">
+              Choose status
+            </option>
+            <option
+              value="seated"
+              [selected]="selectedResolution(entry.actionReference) === 'seated'"
+            >Seated</option>
+            <option
+              value="cancelled"
+              [selected]="selectedResolution(entry.actionReference) === 'cancelled'"
+            >Cancelled</option>
+            <option
+              value="no-show"
+              [selected]="selectedResolution(entry.actionReference) === 'no-show'"
+            >No-show</option>
+          </select>
+        </span>
       </li>
     </ol>
   </section>

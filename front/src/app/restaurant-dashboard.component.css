@@ -24,6 +24,40 @@ button:focus-visible {
   outline-offset: 0.15rem;
 }
 
+select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem;
+  border: 1px solid #767676;
+  border-radius: 0.25rem;
+  background: #ffffff;
+  color: #1c201f;
+  font: inherit;
+}
+
+select:disabled {
+  opacity: 0.65;
+}
+
+select:focus-visible {
+  outline: 0.2rem solid #1a73e8;
+  outline-offset: 0.15rem;
+}
+
+.resolution-control {
+  display: grid;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.resolution-control label {
+  color: #505654;
+  font-size: 0.75rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 h1,
 h2 {
   overflow-wrap: anywhere;
@@ -67,7 +101,7 @@ li span::before {
 
 @media (min-width: 40rem) {
   [data-section='active'] li {
-    grid-template-columns: minmax(4rem, 0.5fr) minmax(8rem, 1.5fr) minmax(10rem, 1.5fr) minmax(5rem, 0.5fr);
+    grid-template-columns: 4rem minmax(0, 1.25fr) minmax(8rem, 1.5fr) 5rem minmax(8rem, 1fr);
   }
 
   [data-section='resolved'] li {
