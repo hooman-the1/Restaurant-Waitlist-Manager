@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
+import { PublicRestaurantLookupController } from './public-restaurant-lookup';
 import {
   FrontendOrigin,
   PasswordHasher,
@@ -24,6 +25,7 @@ import {
     RestaurantSignupController,
     RestaurantVerificationController,
     RestaurantSessionController,
+    PublicRestaurantLookupController,
   ],
   providers: [
     InMemoryStore,
