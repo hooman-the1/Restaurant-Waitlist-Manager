@@ -26,7 +26,8 @@ async function checkOpenApiContract(): Promise<void> {
 }
 
 void checkOpenApiContract().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'OpenAPI check failed.';
+  const message =
+    error instanceof Error ? error.message : 'OpenAPI check failed.';
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

@@ -1,11 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { AppModule } from './app.module';
-import {
-  DEMO_ACCESS,
-  DemoDataSeeder,
-  SystemClock,
-} from './demo-data-seeder';
+import { DEMO_ACCESS, DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
 
 const fixedNow = new Date(2026, 8, 12, 14, 30, 15);
@@ -166,9 +162,9 @@ describe('DemoDataSeeder', () => {
       status: 'cancelled',
       resolvedAt,
     });
-    expect(store.listActiveWaitlistEntries(1).map((entry) => entry.customerName)).toEqual([
-      'Sam Rivera',
-    ]);
+    expect(
+      store.listActiveWaitlistEntries(1).map((entry) => entry.customerName),
+    ).toEqual(['Sam Rivera']);
     expect(store.findWaitlistEntryById(2)).toEqual(originalSam);
     expect(store.findWaitlistEntryById(3)).toEqual(originalAlex);
     const afterSeedRestaurant = store.createRestaurant({

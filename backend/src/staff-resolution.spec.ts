@@ -47,8 +47,9 @@ async function createTestContext(options?: {
   });
   if (options !== undefined && 'signedCookieValue' in options) {
     app.use((incoming: Request, _response: Response, next: NextFunction) => {
-      (incoming as unknown as { signedCookies: Record<string, unknown> })
-        .signedCookies = { restaurant_session: options.signedCookieValue };
+      (
+        incoming as unknown as { signedCookies: Record<string, unknown> }
+      ).signedCookies = { restaurant_session: options.signedCookieValue };
       next();
     });
   }
@@ -176,31 +177,34 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
     ['case variant', { resolution: 'Seated' }],
     ['whitespace variant', { resolution: ' seated ' }],
     ['unknown', { resolution: 'waiting' }],
-  ])('rejects %s with exact validation response before action work', async (_case, body) => {
-    const context = await createTestContext();
-    const before = context.store.findWaitlistEntryById(1);
-    const call = request(context.app.getHttpServer())
-      .patch(`/api/dashboard/waitlist-entries/${morganAction}`)
-      .set('Cookie', sessionCookie('demo-restaurant'));
-    if (
-      body === null ||
-      typeof body === 'string' ||
-      typeof body === 'number' ||
-      typeof body === 'boolean'
-    ) {
-      call.set('Content-Type', 'application/json').send(JSON.stringify(body));
-    } else if (body !== undefined) {
-      call.send(body);
-    }
-    const response = await call.expect(400, {
-      kind: 'validation',
-      message: 'Invalid request.',
-    });
-    expect(context.clock.now).not.toHaveBeenCalled();
-    expect(context.store.findWaitlistEntryById(1)).toEqual(before);
-    expectNeutralHeaders(response);
-    await context.app.close();
-  });
+  ])(
+    'rejects %s with exact validation response before action work',
+    async (_case, body) => {
+      const context = await createTestContext();
+      const before = context.store.findWaitlistEntryById(1);
+      const call = request(context.app.getHttpServer())
+        .patch(`/api/dashboard/waitlist-entries/${morganAction}`)
+        .set('Cookie', sessionCookie('demo-restaurant'));
+      if (
+        body === null ||
+        typeof body === 'string' ||
+        typeof body === 'number' ||
+        typeof body === 'boolean'
+      ) {
+        call.set('Content-Type', 'application/json').send(JSON.stringify(body));
+      } else if (body !== undefined) {
+        call.send(body);
+      }
+      const response = await call.expect(400, {
+        kind: 'validation',
+        message: 'Invalid request.',
+      });
+      expect(context.clock.now).not.toHaveBeenCalled();
+      expect(context.store.findWaitlistEntryById(1)).toEqual(before);
+      expectNeutralHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it('rejects malformed JSON before authentication and transition work', async () => {
     const context = await createTestContext();
@@ -228,32 +232,36 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
     ['wrong-secret', sessionCookie('demo-restaurant', 'wrong-secret')],
     ['empty', sessionCookie('')],
     ['unknown restaurant', sessionCookie('unknown')],
-  ])('authenticates before DTO and action checks for %s session', async (_case, cookie) => {
-    const context = await createTestContext();
-    const transition = jest.spyOn(
-      context.store,
-      'resolveWaitlistEntryByActionReference',
-    );
-    const logs = [
-      jest.spyOn(console, 'log').mockImplementation(() => undefined),
-      jest.spyOn(console, 'warn').mockImplementation(() => undefined),
-      jest.spyOn(console, 'error').mockImplementation(() => undefined),
-    ];
-    const call = request(context.app.getHttpServer())
-      .patch('/api/dashboard/waitlist-entries/unknown-action');
-    if (cookie !== undefined) {
-      call.set('Cookie', cookie);
-    }
-    const response = await call.send({ resolution: 'INVALID' }).expect(401, {
-      kind: 'unauthorized',
-    });
-    expect(context.clock.now).not.toHaveBeenCalled();
-    expect(transition).not.toHaveBeenCalled();
-    expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
-    logs.forEach((log) => log.mockRestore());
-    expectNeutralHeaders(response);
-    await context.app.close();
-  });
+  ])(
+    'authenticates before DTO and action checks for %s session',
+    async (_case, cookie) => {
+      const context = await createTestContext();
+      const transition = jest.spyOn(
+        context.store,
+        'resolveWaitlistEntryByActionReference',
+      );
+      const logs = [
+        jest.spyOn(console, 'log').mockImplementation(() => undefined),
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined),
+        jest.spyOn(console, 'error').mockImplementation(() => undefined),
+      ];
+      const call = request(context.app.getHttpServer()).patch(
+        '/api/dashboard/waitlist-entries/unknown-action',
+      );
+      if (cookie !== undefined) {
+        call.set('Cookie', cookie);
+      }
+      const response = await call.send({ resolution: 'INVALID' }).expect(401, {
+        kind: 'unauthorized',
+      });
+      expect(context.clock.now).not.toHaveBeenCalled();
+      expect(transition).not.toHaveBeenCalled();
+      expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
+      logs.forEach((log) => log.mockRestore());
+      expectNeutralHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it('rejects a non-string signed-cookie value before DTO/action work', async () => {
     const context = await createTestContext({ signedCookieValue: 42 });
@@ -280,9 +288,11 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
 
   it('sanitizes an unexpected authentication-guard failure without cache headers', async () => {
     const context = await createTestContext();
-    jest.spyOn(context.sessionGuard, 'canActivate').mockImplementationOnce(() => {
-      throw new Error(`private guard ${morganAction}`);
-    });
+    jest
+      .spyOn(context.sessionGuard, 'canActivate')
+      .mockImplementationOnce(() => {
+        throw new Error(`private guard ${morganAction}`);
+      });
     const logs = [
       jest.spyOn(console, 'log').mockImplementation(() => undefined),
       jest.spyOn(console, 'warn').mockImplementation(() => undefined),
@@ -467,7 +477,9 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
       join.body.privateStatusToken,
     );
     expect(replacement).toMatchObject({ id: 5, status: 'active' });
-    expect(replacement?.privateStatusToken).not.toBe(before?.privateStatusToken);
+    expect(replacement?.privateStatusToken).not.toBe(
+      before?.privateStatusToken,
+    );
     expect(replacement?.actionReference).not.toBe(before?.actionReference);
     await request(context.app.getHttpServer())
       .post(`/api/restaurants/${other.slug}/waitlist-entries`)
@@ -514,7 +526,9 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
         `/api/waitlist-entries/${morganToken}/cancellations`,
       ),
     ]);
-    expect(responses.map((response) => response.status).sort()).toEqual([200, 404]);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200, 404,
+    ]);
     expect(['seated', 'cancelled']).toContain(
       context.store.findWaitlistEntryById(1)?.status,
     );
@@ -528,8 +542,15 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
   it('isolates concurrent owned resolutions and a foreign request', async () => {
     const context = await createTestContext();
     const second = createEntry(context.store, 1, 'second-owned');
-    const foreignRestaurant = createRestaurant(context.store, 'foreign-concurrent');
-    const foreign = createEntry(context.store, foreignRestaurant.id, 'foreign-concurrent');
+    const foreignRestaurant = createRestaurant(
+      context.store,
+      'foreign-concurrent',
+    );
+    const foreign = createEntry(
+      context.store,
+      foreignRestaurant.id,
+      'foreign-concurrent',
+    );
     const responses = await Promise.all([
       request(context.app.getHttpServer())
         .patch(`/api/dashboard/waitlist-entries/${morganAction}`)
@@ -544,11 +565,13 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
         .set('Cookie', sessionCookie('demo-restaurant'))
         .send({ resolution: 'cancelled' }),
     ]);
-    expect(responses.map((response) => response.status)).toEqual([200, 200, 404]);
-    expect(context.store.findWaitlistEntryById(foreign.id)).toEqual(foreign);
-    expect(context.store.listActiveWaitlistEntries(1).map((entry) => entry.id)).toEqual([
-      2,
+    expect(responses.map((response) => response.status)).toEqual([
+      200, 200, 404,
     ]);
+    expect(context.store.findWaitlistEntryById(foreign.id)).toEqual(foreign);
+    expect(
+      context.store.listActiveWaitlistEntries(1).map((entry) => entry.id),
+    ).toEqual([2]);
     await context.app.close();
   });
 
@@ -617,8 +640,12 @@ describe('PATCH /api/dashboard/waitlist-entries/:actionReference', () => {
         .set('Cookie', sessionCookie('demo-restaurant'))
         .send({ resolution: 'INVALID' }),
     ];
-    expect(responses.map((response) => response.status)).toEqual([200, 404, 400]);
-    expect(JSON.stringify(responses.map((response) => response.body))).not.toMatch(
+    expect(responses.map((response) => response.status)).toEqual([
+      200, 404, 400,
+    ]);
+    expect(
+      JSON.stringify(responses.map((response) => response.body)),
+    ).not.toMatch(
       /9c777a3d|8f4d6e2b|Morgan|555|Demo|position|party|timestamp|restaurant|entry|phone|token|reference/i,
     );
     expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
@@ -698,8 +725,8 @@ describe('atomic staff resolution store operation', () => {
       expect(
         store
           .listActiveWaitlistEntries(restaurant.id)
-          .filter((candidate) =>
-            candidate.normalizedPhone === entry.normalizedPhone,
+          .filter(
+            (candidate) => candidate.normalizedPhone === entry.normalizedPhone,
           ),
       ).toHaveLength(resolutionFirst ? 1 : 0);
     }

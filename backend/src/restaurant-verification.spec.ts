@@ -85,7 +85,9 @@ describe('POST /api/restaurant-verifications', () => {
     expect(response.headers['content-type']).toMatch(/^application\/json/);
     expect(response.headers.location).toBeUndefined();
     expect(Object.keys(response.body)).toEqual(['kind']);
-    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(true);
+    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(
+      true,
+    );
     expect(context.store.findVerificationToken('Exact-Token')).toBeUndefined();
     expect(context.signer.sign).toHaveBeenCalledWith('restaurant-one');
     expect(response.headers['set-cookie']).toHaveLength(1);
@@ -104,32 +106,41 @@ describe('POST /api/restaurant-verifications', () => {
     ['empty token', { token: '' }],
     ['extra property', { token: 'valid', extra: true }],
     ['wrong type', { token: 42 }],
-  ])('maps a %s DTO failure to the route-specific result', async (_case, body) => {
-    const context = await createTestContext();
-    const restaurant = createUnverifiedRestaurant(context.store, 'dto');
-    context.store.createVerificationToken('valid', restaurant.id);
+  ])(
+    'maps a %s DTO failure to the route-specific result',
+    async (_case, body) => {
+      const context = await createTestContext();
+      const restaurant = createUnverifiedRestaurant(context.store, 'dto');
+      context.store.createVerificationToken('valid', restaurant.id);
 
-    const submission = request(context.app.getHttpServer()).post(
-      '/api/restaurant-verifications',
-    );
-    if (body !== undefined) {
-      submission.send(body);
-    }
-    const response = await submission.expect(400, invalidBody);
+      const submission = request(context.app.getHttpServer()).post(
+        '/api/restaurant-verifications',
+      );
+      if (body !== undefined) {
+        submission.send(body);
+      }
+      const response = await submission.expect(400, invalidBody);
 
-    expect(response.headers['set-cookie']).toBeUndefined();
-    expect(Object.keys(response.body)).toEqual(['kind']);
-    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(false);
-    expect(context.store.findVerificationToken('valid')).toBeDefined();
-    await context.app.close();
-  });
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(Object.keys(response.body)).toEqual(['kind']);
+      expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(
+        false,
+      );
+      expect(context.store.findVerificationToken('valid')).toBeDefined();
+      await context.app.close();
+    },
+  );
 
   it('matches tokens exactly without rewriting and consumes only the exact token', async () => {
     const context = await createTestContext();
     const restaurant = createUnverifiedRestaurant(context.store, 'exact');
     context.store.createVerificationToken('Case-Sensitive', restaurant.id);
 
-    for (const token of ['case-sensitive', ' Case-Sensitive', 'Case-Sensitive ']) {
+    for (const token of [
+      'case-sensitive',
+      ' Case-Sensitive',
+      'Case-Sensitive ',
+    ]) {
       const response = await request(context.app.getHttpServer())
         .post('/api/restaurant-verifications')
         .send({ token })
@@ -156,8 +167,14 @@ describe('POST /api/restaurant-verifications', () => {
     'rejects a %s token without affecting an unrelated valid pair',
     async (kind) => {
       const context = await createTestContext();
-      const validRestaurant = createUnverifiedRestaurant(context.store, `valid-${kind}`);
-      context.store.createVerificationToken('unrelated-valid', validRestaurant.id);
+      const validRestaurant = createUnverifiedRestaurant(
+        context.store,
+        `valid-${kind}`,
+      );
+      context.store.createVerificationToken(
+        'unrelated-valid',
+        validRestaurant.id,
+      );
       if (kind === 'missing-restaurant') {
         context.store.createVerificationToken('subject', 9999);
       }
@@ -171,8 +188,12 @@ describe('POST /api/restaurant-verifications', () => {
         .expect(400, invalidBody);
 
       expect(response.headers['set-cookie']).toBeUndefined();
-      expect(context.store.findRestaurantById(validRestaurant.id)?.verified).toBe(false);
-      expect(context.store.findVerificationToken('unrelated-valid')).toBeDefined();
+      expect(
+        context.store.findRestaurantById(validRestaurant.id)?.verified,
+      ).toBe(false);
+      expect(
+        context.store.findVerificationToken('unrelated-valid'),
+      ).toBeDefined();
       if (kind !== 'unknown') {
         expect(context.store.findVerificationToken('subject')).toBeUndefined();
       }
@@ -209,11 +230,19 @@ describe('POST /api/restaurant-verifications', () => {
         .send({ token: 'one-use' }),
     ]);
 
-    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
-    expect(responses.find((response) => response.status === 400)?.body).toEqual(invalidBody);
-    expect(responses.flatMap((response) => response.headers['set-cookie'] ?? [])).toHaveLength(1);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200, 400,
+    ]);
+    expect(responses.find((response) => response.status === 400)?.body).toEqual(
+      invalidBody,
+    );
+    expect(
+      responses.flatMap((response) => response.headers['set-cookie'] ?? []),
+    ).toHaveLength(1);
     expect(context.signer.sign).toHaveBeenCalledTimes(1);
-    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(true);
+    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(
+      true,
+    );
     expect(context.store.findVerificationToken('one-use')).toBeUndefined();
     await context.app.close();
   });
@@ -236,10 +265,16 @@ describe('POST /api/restaurant-verifications', () => {
 
     expect(responses.map((response) => response.status)).toEqual([200, 200]);
     expect(
-      unsign(cookieValue(responses[0].headers['set-cookie'][0]).slice(2), secret),
+      unsign(
+        cookieValue(responses[0].headers['set-cookie'][0]).slice(2),
+        secret,
+      ),
     ).toBe('restaurant-first');
     expect(
-      unsign(cookieValue(responses[1].headers['set-cookie'][0]).slice(2), secret),
+      unsign(
+        cookieValue(responses[1].headers['set-cookie'][0]).slice(2),
+        secret,
+      ),
     ).toBe('restaurant-second');
     expect(context.store.findRestaurantById(first.id)?.verified).toBe(true);
     expect(context.store.findRestaurantById(second.id)?.verified).toBe(true);
@@ -250,7 +285,10 @@ describe('POST /api/restaurant-verifications', () => {
     const context = await createTestContext(() => {
       throw new Error('private signer secret');
     });
-    const restaurant = createUnverifiedRestaurant(context.store, 'signer-failure');
+    const restaurant = createUnverifiedRestaurant(
+      context.store,
+      'signer-failure',
+    );
     context.store.createVerificationToken('signer-token', restaurant.id);
 
     const response = await request(context.app.getHttpServer())
@@ -259,19 +297,28 @@ describe('POST /api/restaurant-verifications', () => {
       .expect(500, unexpectedBody);
 
     expect(response.headers['set-cookie']).toBeUndefined();
-    expect(JSON.stringify(response.body)).not.toMatch(/private|secret|signer-token/i);
-    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(false);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /private|secret|signer-token/i,
+    );
+    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(
+      false,
+    );
     expect(context.store.findVerificationToken('signer-token')).toBeDefined();
     await context.app.close();
   });
 
   it('preserves state and sets no cookie when the atomic store fails', async () => {
     const context = await createTestContext();
-    const restaurant = createUnverifiedRestaurant(context.store, 'store-failure');
+    const restaurant = createUnverifiedRestaurant(
+      context.store,
+      'store-failure',
+    );
     context.store.createVerificationToken('store-token', restaurant.id);
-    jest.spyOn(context.store, 'verifyRestaurantWithToken').mockImplementationOnce(() => {
-      throw new Error('private store detail');
-    });
+    jest
+      .spyOn(context.store, 'verifyRestaurantWithToken')
+      .mockImplementationOnce(() => {
+        throw new Error('private store detail');
+      });
 
     const response = await request(context.app.getHttpServer())
       .post('/api/restaurant-verifications')
@@ -280,7 +327,9 @@ describe('POST /api/restaurant-verifications', () => {
 
     expect(response.headers['set-cookie']).toBeUndefined();
     expect(JSON.stringify(response.body)).not.toMatch(/private|store-token/i);
-    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(false);
+    expect(context.store.findRestaurantById(restaurant.id)?.verified).toBe(
+      false,
+    );
     expect(context.store.findVerificationToken('store-token')).toBeDefined();
     await context.app.close();
   });
@@ -330,9 +379,11 @@ describe('atomic verification store operation', () => {
     const internals = store as unknown as {
       verificationTokens: Map<string, VerificationTokenRecord>;
     };
-    jest.spyOn(internals.verificationTokens, 'delete').mockImplementationOnce(() => {
-      throw new Error('simulated delete failure');
-    });
+    jest
+      .spyOn(internals.verificationTokens, 'delete')
+      .mockImplementationOnce(() => {
+        throw new Error('simulated delete failure');
+      });
 
     expect(() => store.verifyRestaurantWithToken('rollback-token')).toThrow();
     expect(store.findRestaurantById(restaurant.id)?.verified).toBe(false);
@@ -348,7 +399,9 @@ describe('RestaurantSessionSigner', () => {
     const signed = signer.sign(DEMO_ACCESS.staffSessionPayload);
 
     expect(signed).toMatch(/^s:/);
-    expect(unsign(signed.slice(2), secret)).toBe(DEMO_ACCESS.staffSessionPayload);
+    expect(unsign(signed.slice(2), secret)).toBe(
+      DEMO_ACCESS.staffSessionPayload,
+    );
     expect(unsign(signed.slice(2), 'different-secret')).toBe(false);
     const last = signed.at(-1) ?? '';
     const replacement = last === 'a' ? 'b' : 'a';

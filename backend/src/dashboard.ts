@@ -45,9 +45,10 @@ export class DashboardController {
 
   @Get()
   @ApiContractOperation('/api/dashboard', 'get')
-  load(
-    @CurrentRestaurant() principal: RestaurantPrincipal,
-  ): { kind: 'success'; dashboard: DashboardSnapshot } {
+  load(@CurrentRestaurant() principal: RestaurantPrincipal): {
+    kind: 'success';
+    dashboard: DashboardSnapshot;
+  } {
     const dashboard = this.store.readDashboardSnapshot(
       principal.id,
       this.clock.now(),

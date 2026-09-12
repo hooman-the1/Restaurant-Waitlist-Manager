@@ -125,7 +125,9 @@ describe('GET /api/waitlist-entries/:privateToken', () => {
 
   it('recalculates positions after resolution while later inserts do not move earlier entries', async () => {
     const context = await createTestContext();
-    expect(context.store.resolveWaitlistEntry(1, 'seated', fixedNow)).toBeDefined();
+    expect(
+      context.store.resolveWaitlistEntry(1, 'seated', fixedNow),
+    ).toBeDefined();
 
     await request(context.app.getHttpServer())
       .get(`/api/waitlist-entries/${samToken}`)
@@ -266,14 +268,17 @@ describe('GET /api/waitlist-entries/:privateToken', () => {
     'demo-restaurant',
     '1',
     morganAction,
-  ])('returns an exact cached-disabled 404 for non-matching token %s', async (token) => {
-    const context = await createTestContext();
-    const response = await request(context.app.getHttpServer())
-      .get(`/api/waitlist-entries/${token}`)
-      .expect(404, { kind: 'not-found' });
-    expectPrivateHeaders(response);
-    await context.app.close();
-  });
+  ])(
+    'returns an exact cached-disabled 404 for non-matching token %s',
+    async (token) => {
+      const context = await createTestContext();
+      const response = await request(context.app.getHttpServer())
+        .get(`/api/waitlist-entries/${token}`)
+        .expect(404, { kind: 'not-found' });
+      expectPrivateHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it('uses exactly the framework single-decoded token', async () => {
     const context = await createTestContext();
@@ -479,7 +484,9 @@ describe('GET /api/waitlist-entries/:privateToken', () => {
 
   it('keeps repeated and concurrent reads fully read-only, including ID sequences', async () => {
     const context = await createTestContext();
-    const before = [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id));
+    const before = [1, 2, 3].map((id) =>
+      context.store.findWaitlistEntryById(id),
+    );
 
     await Promise.all(
       Array.from({ length: 12 }, (_, index) =>
@@ -489,9 +496,9 @@ describe('GET /api/waitlist-entries/:privateToken', () => {
       ),
     );
 
-    expect([1, 2, 3].map((id) => context.store.findWaitlistEntryById(id))).toEqual(
-      before,
-    );
+    expect(
+      [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id)),
+    ).toEqual(before);
     const restaurant = createRestaurant(context.store, 'after-reads');
     expect(restaurant.id).toBe(2);
     expect(createEntry(context.store, restaurant.id, 'after-reads').id).toBe(4);

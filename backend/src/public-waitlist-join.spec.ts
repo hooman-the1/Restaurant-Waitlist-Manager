@@ -6,10 +6,7 @@ import request = require('supertest');
 import { configureApplication } from './application-configuration';
 import { AppModule } from './app.module';
 import { SystemClock } from './demo-data-seeder';
-import {
-  ActiveWaitlistEntryRecord,
-  InMemoryStore,
-} from './in-memory-store';
+import { ActiveWaitlistEntryRecord, InMemoryStore } from './in-memory-store';
 import {
   ActionReferenceSource,
   PrivateStatusTokenSource,
@@ -83,7 +80,11 @@ const validJoin = {
   partySize: 4,
 };
 
-function createRestaurant(store: InMemoryStore, suffix: string, verified = true) {
+function createRestaurant(
+  store: InMemoryStore,
+  suffix: string,
+  verified = true,
+) {
   return store.createRestaurant({
     name: `Restaurant ${suffix}`,
     normalizedName: `restaurant ${suffix}`,
@@ -114,7 +115,11 @@ function createEntry(
   };
   return status === 'active'
     ? store.createWaitlistEntry({ ...base, status })
-    : store.createWaitlistEntry({ ...base, status, resolvedAt: new Date(fixedNow) });
+    : store.createWaitlistEntry({
+        ...base,
+        status,
+        resolvedAt: new Date(fixedNow),
+      });
 }
 
 function expectNeutralHeaders(response: request.Response): void {
@@ -137,12 +142,16 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       .expect(201, { kind: 'success', privateStatusToken: privateOne });
 
     expect(response.headers['content-type']).toMatch(/^application\/json/);
-    expect(Object.keys(response.body).sort()).toEqual(['kind', 'privateStatusToken']);
+    expect(Object.keys(response.body).sort()).toEqual([
+      'kind',
+      'privateStatusToken',
+    ]);
     expect(response.body.privateStatusToken).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
     expectNeutralHeaders(response);
-    const stored = context.store.findWaitlistEntryByPrivateStatusToken(privateOne);
+    const stored =
+      context.store.findWaitlistEntryByPrivateStatusToken(privateOne);
     expect(stored?.actionReference).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
@@ -159,7 +168,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       joinedAt: fixedNow,
       status: 'active',
     });
-    expect(context.store.listActiveWaitlistEntries(1).map((entry) => entry.id)).toEqual([1, 2, 4]);
+    expect(
+      context.store.listActiveWaitlistEntries(1).map((entry) => entry.id),
+    ).toEqual([1, 2, 4]);
     expect(JSON.stringify(response.body)).not.toMatch(
       /action|customer|phone|party|position|restaurant|joined|internal|normalized/i,
     );
@@ -178,26 +189,32 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     ['decimal party', { ...validJoin, partySize: 1.5 }],
     ['party below range', { ...validJoin, partySize: 0 }],
     ['party above range', { ...validJoin, partySize: 31 }],
-  ])('rejects a %s at the transport boundary without mutation', async (_case, body) => {
-    const context = await createTestContext();
-    const before = context.store.listActiveWaitlistEntries(1);
-    const submission = request(context.app.getHttpServer())
-      .post('/api/restaurants/demo-restaurant/waitlist-entries');
-    if (typeof body === 'string') {
-      submission.set('Content-Type', 'application/json').send(JSON.stringify(body));
-    } else {
-      submission.send(body);
-    }
-    const response = await submission.expect(400, {
-      kind: 'validation',
-      message: 'Invalid request.',
-    });
+  ])(
+    'rejects a %s at the transport boundary without mutation',
+    async (_case, body) => {
+      const context = await createTestContext();
+      const before = context.store.listActiveWaitlistEntries(1);
+      const submission = request(context.app.getHttpServer()).post(
+        '/api/restaurants/demo-restaurant/waitlist-entries',
+      );
+      if (typeof body === 'string') {
+        submission
+          .set('Content-Type', 'application/json')
+          .send(JSON.stringify(body));
+      } else {
+        submission.send(body);
+      }
+      const response = await submission.expect(400, {
+        kind: 'validation',
+        message: 'Invalid request.',
+      });
 
-    expect(context.store.listActiveWaitlistEntries(1)).toEqual(before);
-    expect(context.privateSource.generate).not.toHaveBeenCalled();
-    expectNeutralHeaders(response);
-    await context.app.close();
-  });
+      expect(context.store.listActiveWaitlistEntries(1)).toEqual(before);
+      expect(context.privateSource.generate).not.toHaveBeenCalled();
+      expectNeutralHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it.each(['unknown', 'Demo-Restaurant', '%20demo-restaurant%20'])(
     'uses exact slug lookup before business validation for %s',
@@ -217,13 +234,18 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     await request(context.app.getHttpServer())
       .post('/api/restaurants/demo-restaurant/waitlist-entries')
       .send({ customerName: ' \t ', phone: 'letters', partySize: 1 })
-      .expect(400, { kind: 'validation', message: 'Customer name is required.' });
+      .expect(400, {
+        kind: 'validation',
+        message: 'Customer name is required.',
+      });
 
     await request(context.app.getHttpServer())
       .post('/api/restaurants/demo-restaurant/waitlist-entries')
       .send({ customerName: 'Morgan Lee', phone: '5550104000', partySize: 1 })
       .expect(201);
-    expect(context.store.listActiveWaitlistEntries(1).at(-1)?.customerName).toBe('Morgan Lee');
+    expect(
+      context.store.listActiveWaitlistEntries(1).at(-1)?.customerName,
+    ).toBe('Morgan Lee');
     await context.app.close();
   });
 
@@ -242,7 +264,10 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     await request(context.app.getHttpServer())
       .post('/api/restaurants/demo-restaurant/waitlist-entries')
       .send({ ...validJoin, phone })
-      .expect(400, { kind: 'validation', message: 'Enter a valid phone number.' });
+      .expect(400, {
+        kind: 'validation',
+        message: 'Enter a valid phone number.',
+      });
     expect(context.privateSource.generate).not.toHaveBeenCalled();
     await context.app.close();
   });
@@ -252,38 +277,53 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     ['leading plus formatted', '+1 (555) 010-4000', '+15550104000'],
     ['leading plus compact', '+15550104000', '+15550104000'],
     ['compact without plus', '15550104000', '15550104000'],
-  ])('stores %s phone with exact display and comparison values', async (_case, phone, normalizedPhone) => {
-    const context = await createTestContext();
-    await request(context.app.getHttpServer())
-      .post('/api/restaurants/demo-restaurant/waitlist-entries')
-      .send({ ...validJoin, phone })
-      .expect(201);
-    const entry = context.store.findWaitlistEntryByPrivateStatusToken(privateOne);
-    expect(entry?.phone).toBe(phone);
-    expect(entry?.normalizedPhone).toBe(normalizedPhone);
-    await context.app.close();
-  });
+  ])(
+    'stores %s phone with exact display and comparison values',
+    async (_case, phone, normalizedPhone) => {
+      const context = await createTestContext();
+      await request(context.app.getHttpServer())
+        .post('/api/restaurants/demo-restaurant/waitlist-entries')
+        .send({ ...validJoin, phone })
+        .expect(201);
+      const entry =
+        context.store.findWaitlistEntryByPrivateStatusToken(privateOne);
+      expect(entry?.phone).toBe(phone);
+      expect(entry?.normalizedPhone).toBe(normalizedPhone);
+      await context.app.close();
+    },
+  );
 
-  it.each([1, 30])('accepts party-size boundary %i without changing FIFO priority', async (partySize) => {
-    const context = await createTestContext();
-    await request(context.app.getHttpServer())
-      .post('/api/restaurants/demo-restaurant/waitlist-entries')
-      .send({ ...validJoin, partySize })
-      .expect(201);
-    expect(context.store.listActiveWaitlistEntries(1).at(-1)?.partySize).toBe(partySize);
-    await context.app.close();
-  });
+  it.each([1, 30])(
+    'accepts party-size boundary %i without changing FIFO priority',
+    async (partySize) => {
+      const context = await createTestContext();
+      await request(context.app.getHttpServer())
+        .post('/api/restaurants/demo-restaurant/waitlist-entries')
+        .send({ ...validJoin, partySize })
+        .expect(201);
+      expect(context.store.listActiveWaitlistEntries(1).at(-1)?.partySize).toBe(
+        partySize,
+      );
+      await context.app.close();
+    },
+  );
 
   it('rejects an active normalized-phone duplicate without exposing its capability', async () => {
     const context = await createTestContext();
     const before = context.store.listActiveWaitlistEntries(1);
     const response = await request(context.app.getHttpServer())
       .post('/api/restaurants/demo-restaurant/waitlist-entries')
-      .send({ customerName: 'Duplicate Name Allowed', phone: '5550101000', partySize: 1 })
+      .send({
+        customerName: 'Duplicate Name Allowed',
+        phone: '5550101000',
+        partySize: 1,
+      })
       .expect(409, duplicateBody);
 
     expect(Object.keys(response.body).sort()).toEqual(['kind', 'message']);
-    expect(JSON.stringify(response.body)).not.toMatch(/8f4d6e2b|Morgan|reference|token/i);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /8f4d6e2b|Morgan|reference|token/i,
+    );
     expect(context.store.listActiveWaitlistEntries(1)).toEqual(before);
     expect(context.privateSource.generate).not.toHaveBeenCalled();
     await context.app.close();
@@ -308,7 +348,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       .post(`/api/restaurants/${restaurant.slug}/waitlist-entries`)
       .send(validJoin)
       .expect(201, { kind: 'success', privateStatusToken: privateOne });
-    expect(context.store.listActiveWaitlistEntries(restaurant.id)).toHaveLength(1);
+    expect(context.store.listActiveWaitlistEntries(restaurant.id)).toHaveLength(
+      1,
+    );
     await context.app.close();
   });
 
@@ -322,18 +364,18 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
         .post(`/api/restaurants/${restaurant.slug}/waitlist-entries`)
         .send({ ...validJoin, phone: '(555) 010-9000' })
         .expect(201);
-      expect(context.store.listActiveWaitlistEntries(restaurant.id)).toHaveLength(1);
-      expect(context.store.listResolvedWaitlistEntries(restaurant.id)).toHaveLength(1);
+      expect(
+        context.store.listActiveWaitlistEntries(restaurant.id),
+      ).toHaveLength(1);
+      expect(
+        context.store.listResolvedWaitlistEntries(restaurant.id),
+      ).toHaveLength(1);
       await context.app.close();
     },
   );
 
   it('retries a complete capability pair on cross-namespace collisions', async () => {
-    const privateValues = [
-      actionOne,
-      privateTwo,
-      privateTwo,
-    ];
+    const privateValues = [actionOne, privateTwo, privateTwo];
     const actionValues = [actionTwo, privateOne, actionTwo];
     const context = await createTestContext({
       privateToken: () => privateValues.shift() ?? privateTwo,
@@ -357,7 +399,10 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       .expect(201, { kind: 'success', privateStatusToken: privateTwo });
     expect(context.privateSource.generate).toHaveBeenCalledTimes(3);
     expect(context.actionSource.generate).toHaveBeenCalledTimes(3);
-    expect(context.store.findWaitlistEntryByActionReference(actionTwo)?.privateStatusToken).toBe(privateTwo);
+    expect(
+      context.store.findWaitlistEntryByActionReference(actionTwo)
+        ?.privateStatusToken,
+    ).toBe(privateTwo);
     await context.app.close();
   });
 
@@ -384,7 +429,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       .post('/api/restaurants/demo-restaurant/waitlist-entries')
       .send(validJoin)
       .expect(201);
-    expect(context.store.findWaitlistEntryByPrivateStatusToken(privateOne)?.id).toBe(4);
+    expect(
+      context.store.findWaitlistEntryByPrivateStatusToken(privateOne)?.id,
+    ).toBe(4);
     await context.app.close();
   });
 
@@ -491,7 +538,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
           dataField === 'customer name' ? joinDataUuid : validJoin.customerName,
         phone: dataField === 'display phone' ? joinDataUuid : validJoin.phone,
       };
-      const before = context.store.listActiveWaitlistEntries(restaurant?.id ?? 0);
+      const before = context.store.listActiveWaitlistEntries(
+        restaurant?.id ?? 0,
+      );
 
       await request(context.app.getHttpServer())
         .post(`/api/restaurants/${restaurant?.slug}/waitlist-entries`)
@@ -500,9 +549,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
 
       expect(context.privateSource.generate).toHaveBeenCalledTimes(3);
       expect(context.actionSource.generate).toHaveBeenCalledTimes(3);
-      expect(context.store.listActiveWaitlistEntries(restaurant?.id ?? 0)).toEqual(
-        before,
-      );
+      expect(
+        context.store.listActiveWaitlistEntries(restaurant?.id ?? 0),
+      ).toEqual(before);
 
       context.privateSource.generate.mockImplementation(() => privateTwo);
       context.actionSource.generate.mockImplementation(() => actionTwo);
@@ -535,7 +584,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
       .send(validJoin)
       .expect(201, { kind: 'success', privateStatusToken: privateTwo });
     expect(context.privateSource.generate).toHaveBeenCalledTimes(2);
-    expect(context.store.findWaitlistEntryByPrivateStatusToken(privateOne)).toBeUndefined();
+    expect(
+      context.store.findWaitlistEntryByPrivateStatusToken(privateOne),
+    ).toBeUndefined();
     await context.app.close();
   });
 
@@ -557,9 +608,17 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
         .send({ ...validJoin, phone: '5550104000' }),
     ]);
 
-    expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
-    expect(context.store.listActiveWaitlistEntries(1).filter((entry) => entry.normalizedPhone === '5550104000')).toHaveLength(1);
-    expect(responses.filter((response) => response.body.privateStatusToken)).toHaveLength(1);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      201, 409,
+    ]);
+    expect(
+      context.store
+        .listActiveWaitlistEntries(1)
+        .filter((entry) => entry.normalizedPhone === '5550104000'),
+    ).toHaveLength(1);
+    expect(
+      responses.filter((response) => response.body.privateStatusToken),
+    ).toHaveLength(1);
     await context.app.close();
   });
 
@@ -584,8 +643,12 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([201, 201]);
-    expect(context.store.listActiveWaitlistEntries(1).at(-1)?.normalizedPhone).toBe('5550104000');
-    expect(context.store.listActiveWaitlistEntries(other.id).at(-1)?.normalizedPhone).toBe('5550105000');
+    expect(
+      context.store.listActiveWaitlistEntries(1).at(-1)?.normalizedPhone,
+    ).toBe('5550104000');
+    expect(
+      context.store.listActiveWaitlistEntries(other.id).at(-1)?.normalizedPhone,
+    ).toBe('5550105000');
     await context.app.close();
   });
 
@@ -609,9 +672,11 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
         });
       }
       if (failure === 'store') {
-        jest.spyOn(context.store, 'commitWaitlistJoin').mockImplementationOnce(() => {
-          throw new Error('private store');
-        });
+        jest
+          .spyOn(context.store, 'commitWaitlistJoin')
+          .mockImplementationOnce(() => {
+            throw new Error('private store');
+          });
       }
       const before = context.store.listActiveWaitlistEntries(1);
 
@@ -620,7 +685,9 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
         .send(validJoin)
         .expect(500, unexpectedBody);
 
-      expect(JSON.stringify(response.body)).not.toMatch(/private|generator|clock|store|Taylor|555/i);
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /private|generator|clock|store|Taylor|555/i,
+      );
       expect(context.store.listActiveWaitlistEntries(1)).toEqual(before);
       expectNeutralHeaders(response);
 
@@ -628,32 +695,42 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
         .post('/api/restaurants/demo-restaurant/waitlist-entries')
         .send(validJoin)
         .expect(201, { kind: 'success', privateStatusToken: privateOne });
-      expect(context.store.findWaitlistEntryByPrivateStatusToken(privateOne)?.id).toBe(4);
+      expect(
+        context.store.findWaitlistEntryByPrivateStatusToken(privateOne)?.id,
+      ).toBe(4);
       await context.app.close();
     },
   );
 
   it.each([
-    ['valid', `restaurant_session=${encodeURIComponent(`s:${sign('demo-restaurant', 'join-test-secret')}`)}`],
+    [
+      'valid',
+      `restaurant_session=${encodeURIComponent(`s:${sign('demo-restaurant', 'join-test-secret')}`)}`,
+    ],
     ['unsigned', 'restaurant_session=demo-restaurant'],
     [
       'invalid signature',
       `restaurant_session=${encodeURIComponent(`s:${sign('demo-restaurant', 'wrong-secret')}`)}`,
     ],
     ['tampered', 'restaurant_session=s%3Atampered'],
-  ])('ignores a %s restaurant cookie and does not log', async (_case, cookie) => {
-    const context = await createTestContext();
-    const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    const response = await request(context.app.getHttpServer())
-      .post('/api/restaurants/demo-restaurant/waitlist-entries')
-      .set('Cookie', cookie)
-      .send(validJoin)
-      .expect(201);
-    expectNeutralHeaders(response);
-    expect(log).not.toHaveBeenCalled();
-    log.mockRestore();
-    await context.app.close();
-  });
+  ])(
+    'ignores a %s restaurant cookie and does not log',
+    async (_case, cookie) => {
+      const context = await createTestContext();
+      const log = jest
+        .spyOn(console, 'log')
+        .mockImplementation(() => undefined);
+      const response = await request(context.app.getHttpServer())
+        .post('/api/restaurants/demo-restaurant/waitlist-entries')
+        .set('Cookie', cookie)
+        .send(validJoin)
+        .expect(201);
+      expectNeutralHeaders(response);
+      expect(log).not.toHaveBeenCalled();
+      log.mockRestore();
+      await context.app.close();
+    },
+  );
 });
 
 describe('atomic waitlist join store operation', () => {
@@ -671,7 +748,9 @@ describe('atomic waitlist join store operation', () => {
       joinedAt: fixedNow,
     };
 
-    expect(store.commitWaitlistJoin('missing', input)).toEqual({ kind: 'not-found' });
+    expect(store.commitWaitlistJoin('missing', input)).toEqual({
+      kind: 'not-found',
+    });
     expect(store.commitWaitlistJoin(restaurant.slug, input)).toEqual({
       kind: 'duplicate-phone',
     });
@@ -701,11 +780,15 @@ describe('atomic waitlist join store operation', () => {
     const internals = store as unknown as {
       waitlistEntries: Map<number, ActiveWaitlistEntryRecord>;
     };
-    const originalSet = internals.waitlistEntries.set.bind(internals.waitlistEntries);
-    jest.spyOn(internals.waitlistEntries, 'set').mockImplementationOnce((id, entry) => {
-      originalSet(id, entry);
-      throw new Error('simulated insertion failure');
-    });
+    const originalSet = internals.waitlistEntries.set.bind(
+      internals.waitlistEntries,
+    );
+    jest
+      .spyOn(internals.waitlistEntries, 'set')
+      .mockImplementationOnce((id, entry) => {
+        originalSet(id, entry);
+        throw new Error('simulated insertion failure');
+      });
     const input = {
       customerName: 'Customer',
       phone: '123',
@@ -717,7 +800,9 @@ describe('atomic waitlist join store operation', () => {
     };
 
     expect(() => store.commitWaitlistJoin(restaurant.slug, input)).toThrow();
-    expect(store.findWaitlistEntryByPrivateStatusToken(privateOne)).toBeUndefined();
+    expect(
+      store.findWaitlistEntryByPrivateStatusToken(privateOne),
+    ).toBeUndefined();
     expect(store.commitWaitlistJoin(restaurant.slug, input)).toMatchObject({
       kind: 'created',
       entry: { id: 1 },
@@ -746,11 +831,12 @@ describe('atomic waitlist join store operation', () => {
         createdAt: fixedNow,
       });
       const input = {
-        customerName:
-          dataField === 'customer name' ? joinDataUuid : 'Customer',
+        customerName: dataField === 'customer name' ? joinDataUuid : 'Customer',
         phone: dataField === 'display phone' ? joinDataUuid : '123',
         normalizedPhone:
-          dataField === 'display phone' ? '50000000000040008000000000000005' : '123',
+          dataField === 'display phone'
+            ? '50000000000040008000000000000005'
+            : '123',
         partySize: 1,
         privateStatusToken:
           capability === 'private' ? joinDataUuid : privateOne,

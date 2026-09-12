@@ -191,7 +191,8 @@ export class DashboardViewResponse {
 
   @ApiProperty({
     type: () => [ActiveDashboardEntryResponse],
-    description: 'Active entries in strict FIFO order with one-based positions.',
+    description:
+      'Active entries in strict FIFO order with one-based positions.',
   })
   activeEntries!: ActiveDashboardEntryResponse[];
 

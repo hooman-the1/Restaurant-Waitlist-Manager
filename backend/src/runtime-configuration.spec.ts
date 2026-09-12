@@ -32,17 +32,25 @@ describe('validateRuntimeEnvironment', () => {
     });
   });
 
-  it.each([undefined, '', '   '])('rejects a missing or empty secret', (secret) => {
-    expect(() => validateRuntimeEnvironment({ SECRET_KEY: secret })).toThrow(
-      'Configuration error: SECRET_KEY is required.',
-    );
-  });
+  it.each([undefined, '', '   '])(
+    'rejects a missing or empty secret',
+    (secret) => {
+      expect(() => validateRuntimeEnvironment({ SECRET_KEY: secret })).toThrow(
+        'Configuration error: SECRET_KEY is required.',
+      );
+    },
+  );
 
-  it.each(['0', '65536', '1.5', 'abc', ''])('rejects invalid port %p', (port) => {
-    expect(() =>
-      validateRuntimeEnvironment({ PORT: port, SECRET_KEY: 'secret' }),
-    ).toThrow('Configuration error: PORT must be an integer from 1 to 65535.');
-  });
+  it.each(['0', '65536', '1.5', 'abc', ''])(
+    'rejects invalid port %p',
+    (port) => {
+      expect(() =>
+        validateRuntimeEnvironment({ PORT: port, SECRET_KEY: 'secret' }),
+      ).toThrow(
+        'Configuration error: PORT must be an integer from 1 to 65535.',
+      );
+    },
+  );
 
   it.each([
     'localhost:4200',

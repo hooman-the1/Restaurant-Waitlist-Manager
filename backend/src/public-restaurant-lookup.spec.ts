@@ -25,7 +25,9 @@ interface TestContext {
 }
 
 async function createTestContext(): Promise<TestContext> {
-  const module = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const module = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
   const app = module.createNestApplication();
   configureApplication(app, {
     port: 8000,
@@ -135,27 +137,33 @@ describe('GET /api/restaurants/:restaurantSlug', () => {
   it.each([
     ['verified', true],
     ['unverified', false],
-  ])('returns a %s restaurant because the public waitlist is always open', async (_case, verified) => {
-    const context = await createTestContext();
-    createRestaurant(context.store, {
-      name: `Publication ${String(verified)}`,
-      slug: `publication-${String(verified)}`,
-      verified,
-    });
-
-    await request(context.app.getHttpServer())
-      .get(`/api/restaurants/publication-${String(verified)}`)
-      .expect(200, {
-        kind: 'success',
-        restaurant: { restaurantName: `Publication ${String(verified)}` },
+  ])(
+    'returns a %s restaurant because the public waitlist is always open',
+    async (_case, verified) => {
+      const context = await createTestContext();
+      createRestaurant(context.store, {
+        name: `Publication ${String(verified)}`,
+        slug: `publication-${String(verified)}`,
+        verified,
       });
-    await context.app.close();
-  });
+
+      await request(context.app.getHttpServer())
+        .get(`/api/restaurants/publication-${String(verified)}`)
+        .expect(200, {
+          kind: 'success',
+          restaurant: { restaurantName: `Publication ${String(verified)}` },
+        });
+      await context.app.close();
+    },
+  );
 
   it.each([
     ['valid', signedCookie(DEMO_ACCESS.staffSessionPayload)],
     ['unsigned', 'restaurant_session=demo-restaurant'],
-    ['wrong secret', signedCookie(DEMO_ACCESS.staffSessionPayload, 'wrong-secret')],
+    [
+      'wrong secret',
+      signedCookie(DEMO_ACCESS.staffSessionPayload, 'wrong-secret'),
+    ],
     ['tampered', `${signedCookie(DEMO_ACCESS.staffSessionPayload)}x`],
   ])('ignores a %s restaurant session cookie', async (_case, cookie) => {
     const context = await createTestContext();
@@ -188,24 +196,39 @@ describe('GET /api/restaurants/:restaurantSlug', () => {
       status: 'active',
     });
     const beforeRestaurant = context.store.findRestaurantById(other.id);
-    const beforeToken = context.store.findVerificationToken('keep-verification');
+    const beforeToken =
+      context.store.findVerificationToken('keep-verification');
     const beforeEntry = context.store.findWaitlistEntryById(entry.id);
 
     const responses = await Promise.all([
-      request(context.app.getHttpServer()).get('/api/restaurants/demo-restaurant'),
-      request(context.app.getHttpServer()).get('/api/restaurants/other-restaurant'),
-      request(context.app.getHttpServer()).get('/api/restaurants/demo-restaurant'),
-      request(context.app.getHttpServer()).get('/api/restaurants/other-restaurant'),
+      request(context.app.getHttpServer()).get(
+        '/api/restaurants/demo-restaurant',
+      ),
+      request(context.app.getHttpServer()).get(
+        '/api/restaurants/other-restaurant',
+      ),
+      request(context.app.getHttpServer()).get(
+        '/api/restaurants/demo-restaurant',
+      ),
+      request(context.app.getHttpServer()).get(
+        '/api/restaurants/other-restaurant',
+      ),
     ]);
 
-    expect(responses.map((response) => response.body.restaurant.restaurantName)).toEqual([
+    expect(
+      responses.map((response) => response.body.restaurant.restaurantName),
+    ).toEqual([
       'Demo Restaurant',
       'Other Restaurant',
       'Demo Restaurant',
       'Other Restaurant',
     ]);
-    expect(context.store.findRestaurantById(other.id)).toEqual(beforeRestaurant);
-    expect(context.store.findVerificationToken('keep-verification')).toEqual(beforeToken);
+    expect(context.store.findRestaurantById(other.id)).toEqual(
+      beforeRestaurant,
+    );
+    expect(context.store.findVerificationToken('keep-verification')).toEqual(
+      beforeToken,
+    );
     expect(context.store.findWaitlistEntryById(entry.id)).toEqual(beforeEntry);
     const next = createRestaurant(context.store, {
       name: 'Sequence Proof',
@@ -219,9 +242,11 @@ describe('GET /api/restaurants/:restaurantSlug', () => {
   it('sanitizes a store lookup failure without logging or leaking request/account details', async () => {
     const context = await createTestContext();
     const log = jest.spyOn(console, 'log').mockImplementation(() => undefined);
-    jest.spyOn(context.store, 'findRestaurantBySlug').mockImplementationOnce(() => {
-      throw new Error('private store detail for failing-slug');
-    });
+    jest
+      .spyOn(context.store, 'findRestaurantBySlug')
+      .mockImplementationOnce(() => {
+        throw new Error('private store detail for failing-slug');
+      });
 
     const response = await request(context.app.getHttpServer())
       .get('/api/restaurants/failing-slug')
@@ -229,7 +254,9 @@ describe('GET /api/restaurants/:restaurantSlug', () => {
 
     expect(response.headers['content-type']).toMatch(/^application\/json/);
     expect(Object.keys(response.body).sort()).toEqual(['kind', 'message']);
-    expect(JSON.stringify(response.body)).not.toMatch(/private|store|failing-slug|stack/i);
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /private|store|failing-slug|stack/i,
+    );
     expectNeutralHeaders(response);
     expect(log).not.toHaveBeenCalled();
     log.mockRestore();

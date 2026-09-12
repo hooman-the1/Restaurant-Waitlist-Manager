@@ -31,9 +31,7 @@ type RestaurantSessionRequest = Request & {
   [restaurantPrincipal]?: RestaurantPrincipal;
 };
 
-export function getRestaurantPrincipal(
-  request: Request,
-): RestaurantPrincipal {
+export function getRestaurantPrincipal(request: Request): RestaurantPrincipal {
   const principal = (request as RestaurantSessionRequest)[restaurantPrincipal];
   if (principal === undefined) {
     throw new Error('Authenticated restaurant principal is unavailable.');
@@ -104,9 +102,9 @@ export class RestaurantSessionGuard implements CanActivate {
 export class RestaurantSessionController {
   @Get()
   @ApiContractOperation('/api/restaurant-session', 'get')
-  session(
-    @CurrentRestaurant() _principal: RestaurantPrincipal,
-  ): { kind: 'allowed' } {
+  session(@CurrentRestaurant() _principal: RestaurantPrincipal): {
+    kind: 'allowed';
+  } {
     return { kind: 'allowed' };
   }
 }

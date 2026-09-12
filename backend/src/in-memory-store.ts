@@ -32,8 +32,7 @@ export interface VerificationTokenRecord {
 }
 
 export type RestaurantVerificationResult =
-  | { kind: 'verified'; restaurant: RestaurantRecord }
-  | { kind: 'invalid' };
+  { kind: 'verified'; restaurant: RestaurantRecord } | { kind: 'invalid' };
 
 export type FinalWaitlistStatus = 'seated' | 'cancelled' | 'no-show';
 export type WaitlistStatus = 'active' | FinalWaitlistStatus;
@@ -61,8 +60,7 @@ export interface ResolvedWaitlistEntryRecord extends WaitlistEntryBase {
 }
 
 export type WaitlistEntryRecord =
-  | ActiveWaitlistEntryRecord
-  | ResolvedWaitlistEntryRecord;
+  ActiveWaitlistEntryRecord | ResolvedWaitlistEntryRecord;
 
 export type CreateWaitlistEntryInput =
   | Omit<ActiveWaitlistEntryRecord, 'id'>
@@ -187,7 +185,8 @@ export class InMemoryStore {
   hasRestaurantConflict(keys: RestaurantUniquenessKeys): boolean {
     return (
       this.findRestaurantByNormalizedName(keys.normalizedName) !== undefined ||
-      this.findRestaurantByNormalizedEmail(keys.normalizedEmail) !== undefined ||
+      this.findRestaurantByNormalizedEmail(keys.normalizedEmail) !==
+        undefined ||
       this.findRestaurantBySlug(keys.slug) !== undefined
     );
   }
@@ -257,9 +256,7 @@ export class InMemoryStore {
     return record === undefined ? undefined : { ...record };
   }
 
-  consumeVerificationToken(
-    token: string,
-  ): VerificationTokenRecord | undefined {
+  consumeVerificationToken(token: string): VerificationTokenRecord | undefined {
     const record = this.verificationTokens.get(token);
     if (record === undefined) {
       return undefined;
@@ -302,9 +299,7 @@ export class InMemoryStore {
     };
   }
 
-  createWaitlistEntry(
-    input: CreateWaitlistEntryInput,
-  ): WaitlistEntryRecord {
+  createWaitlistEntry(input: CreateWaitlistEntryInput): WaitlistEntryRecord {
     assertValidWaitlistEntry(input);
     const entry = cloneWaitlistEntry({
       ...input,
@@ -339,9 +334,7 @@ export class InMemoryStore {
     );
   }
 
-  readPrivateWaitlistStatus(
-    token: string,
-  ): PrivateWaitlistStatusReadResult {
+  readPrivateWaitlistStatus(token: string): PrivateWaitlistStatusReadResult {
     const entry = [...this.waitlistEntries.values()].find(
       (candidate) => candidate.privateStatusToken === token,
     );
@@ -529,9 +522,7 @@ export class InMemoryStore {
     if (restaurant === undefined) {
       return { kind: 'not-found' };
     }
-    if (
-      this.hasActivePhoneDuplicate(restaurant.id, input.normalizedPhone)
-    ) {
+    if (this.hasActivePhoneDuplicate(restaurant.id, input.normalizedPhone)) {
       return { kind: 'duplicate-phone' };
     }
     if (
@@ -575,8 +566,8 @@ export class InMemoryStore {
       String(input.partySize),
       String(this.nextWaitlistEntryId),
     ];
-    return [input.privateStatusToken, input.actionReference].some((capability) =>
-      protectedValues.includes(capability),
+    return [input.privateStatusToken, input.actionReference].some(
+      (capability) => protectedValues.includes(capability),
     );
   }
 

@@ -149,7 +149,10 @@ describe('GET /api/restaurant-session', () => {
     ['no cookie', undefined],
     ['unsigned known slug', 'restaurant_session=demo-restaurant'],
     ['empty value', 'restaurant_session='],
-    ['wrong secret', signedCookie(DEMO_ACCESS.staffSessionPayload, 'wrong-secret')],
+    [
+      'wrong secret',
+      signedCookie(DEMO_ACCESS.staffSessionPayload, 'wrong-secret'),
+    ],
   ])('rejects %s with the exact private response', async (_case, cookie) => {
     const context = await createTestContext();
     const submission = request(context.app.getHttpServer()).get(
@@ -223,9 +226,11 @@ describe('GET /api/restaurant-session', () => {
 
   it('sanitizes store and signed-cookie accessor failures without refreshing a cookie', async () => {
     const context = await createTestContext();
-    jest.spyOn(context.store, 'findRestaurantBySlug').mockImplementationOnce(() => {
-      throw new Error('private store account detail');
-    });
+    jest
+      .spyOn(context.store, 'findRestaurantBySlug')
+      .mockImplementationOnce(() => {
+        throw new Error('private store account detail');
+      });
     const storeFailure = await request(context.app.getHttpServer())
       .get('/api/restaurant-session')
       .set('Cookie', signedCookie(DEMO_ACCESS.staffSessionPayload))
@@ -237,7 +242,9 @@ describe('GET /api/restaurant-session', () => {
 
     for (const response of [storeFailure, accessorFailure]) {
       expect(response.headers['set-cookie']).toBeUndefined();
-      expect(JSON.stringify(response.body)).not.toMatch(/private|store|account|cookie/i);
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /private|store|account|cookie/i,
+      );
     }
     await context.app.close();
   });
@@ -283,9 +290,11 @@ describe('reusable restaurant session guard', () => {
     await request(context.app.getHttpServer())
       .get('/guard-probe')
       .expect(401, unauthorizedBody);
-    jest.spyOn(context.store, 'findRestaurantBySlug').mockImplementationOnce(() => {
-      throw new Error('private lookup');
-    });
+    jest
+      .spyOn(context.store, 'findRestaurantBySlug')
+      .mockImplementationOnce(() => {
+        throw new Error('private lookup');
+      });
     await request(context.app.getHttpServer())
       .get('/guard-probe')
       .set('Cookie', signedCookie(DEMO_ACCESS.staffSessionPayload))
@@ -329,14 +338,20 @@ describe('reusable restaurant session guard', () => {
     ['non-string', { signedCookies: { restaurant_session: 42 } }],
     [
       'inherited property',
-      { signedCookies: Object.create({ restaurant_session: 'demo-restaurant' }) as object },
+      {
+        signedCookies: Object.create({
+          restaurant_session: 'demo-restaurant',
+        }) as object,
+      },
     ],
     [
       'unsigned fallback only',
       { cookies: { restaurant_session: 'demo-restaurant' } },
     ],
   ])('fails closed for %s', (_case, incomingRequest) => {
-    const store = { findRestaurantBySlug: jest.fn() } as unknown as InMemoryStore;
+    const store = {
+      findRestaurantBySlug: jest.fn(),
+    } as unknown as InMemoryStore;
     const guard = new RestaurantSessionGuard(store);
     const context = {
       switchToHttp: () => ({ getRequest: () => incomingRequest }),

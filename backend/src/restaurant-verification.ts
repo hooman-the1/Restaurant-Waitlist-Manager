@@ -79,9 +79,7 @@ export class RestaurantVerificationController {
       throw invalidOrUsedTokenFailure();
     }
 
-    const restaurant = this.store.findRestaurantById(
-      verification.restaurantId,
-    );
+    const restaurant = this.store.findRestaurantById(verification.restaurantId);
     if (restaurant === undefined || restaurant.verified) {
       this.store.verifyRestaurantWithToken(input.token);
       throw invalidOrUsedTokenFailure();

@@ -173,7 +173,12 @@ describe('request DTO and failure HTTP contract', () => {
       .send({ token: 'opaque' })
       .expect(201, { token: 'opaque' });
 
-    for (const invalid of [{}, { token: '' }, { token: 1 }, { token: 'x', extra: 1 }]) {
+    for (const invalid of [
+      {},
+      { token: '' },
+      { token: 1 },
+      { token: 'x', extra: 1 },
+    ]) {
       await expectValidationFailure('/contract-test/verification', invalid);
     }
   });
@@ -224,13 +229,16 @@ describe('request DTO and failure HTTP contract', () => {
     ['string', '"primitive"'],
     ['number', '42'],
     ['boolean', 'true'],
-  ])('maps a %s JSON body to the deterministic validation response', async (_name, body) => {
-    await request(app.getHttpServer())
-      .post('/contract-test/signup')
-      .set('Content-Type', 'application/json')
-      .send(body)
-      .expect(400, { kind: 'validation', message: 'Invalid request.' });
-  });
+  ])(
+    'maps a %s JSON body to the deterministic validation response',
+    async (_name, body) => {
+      await request(app.getHttpServer())
+        .post('/contract-test/signup')
+        .set('Content-Type', 'application/json')
+        .send(body)
+        .expect(400, { kind: 'validation', message: 'Invalid request.' });
+    },
+  );
 
   it.each([
     [

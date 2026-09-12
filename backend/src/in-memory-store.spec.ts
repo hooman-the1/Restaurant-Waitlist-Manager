@@ -68,7 +68,9 @@ describe('InMemoryStore NestJS scope', () => {
     first.store.createRestaurant(restaurantInput());
 
     expect(second.store.findRestaurantById(1)?.name).toBe('Restaurant one');
-    expect(secondModule.get(InMemoryStore).findRestaurantById(1)).toBeUndefined();
+    expect(
+      secondModule.get(InMemoryStore).findRestaurantById(1),
+    ).toBeUndefined();
 
     await firstModule.close();
     await secondModule.close();
@@ -206,16 +208,22 @@ describe('InMemoryStore records', () => {
         untouched,
         alsoUntouched,
       ]);
-      expect(store.listResolvedWaitlistEntries(restaurant.id)).toEqual([resolved]);
+      expect(store.listResolvedWaitlistEntries(restaurant.id)).toEqual([
+        resolved,
+      ]);
       expect(
         store.findWaitlistEntryByPrivateStatusToken(target.privateStatusToken),
       ).toEqual(resolved);
-      expect(store.findWaitlistEntryByActionReference(target.actionReference)).toEqual(
-        resolved,
-      );
+      expect(
+        store.findWaitlistEntryByActionReference(target.actionReference),
+      ).toEqual(resolved);
       expect(store.findWaitlistEntryById(untouched.id)).toEqual(untouched);
-      expect(store.findWaitlistEntryById(alsoUntouched.id)).toEqual(alsoUntouched);
-      expect(store.resolveWaitlistEntry(999, status, resolvedAt)).toBeUndefined();
+      expect(store.findWaitlistEntryById(alsoUntouched.id)).toEqual(
+        alsoUntouched,
+      );
+      expect(
+        store.resolveWaitlistEntry(999, status, resolvedAt),
+      ).toBeUndefined();
     },
   );
 

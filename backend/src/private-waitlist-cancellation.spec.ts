@@ -251,18 +251,21 @@ describe('POST /api/waitlist-entries/:privateToken/cancellations', () => {
     'demo-restaurant',
     '1',
     morganAction,
-  ])('rejects exact-token mismatch %s without clock or mutation', async (token) => {
-    const context = await createTestContext();
-    const before = context.store.findWaitlistEntryById(1);
-    const response = await request(context.app.getHttpServer())
-      .post(`/api/waitlist-entries/${token}/cancellations`)
-      .expect(404, { kind: 'not-found' });
+  ])(
+    'rejects exact-token mismatch %s without clock or mutation',
+    async (token) => {
+      const context = await createTestContext();
+      const before = context.store.findWaitlistEntryById(1);
+      const response = await request(context.app.getHttpServer())
+        .post(`/api/waitlist-entries/${token}/cancellations`)
+        .expect(404, { kind: 'not-found' });
 
-    expect(context.clock.now).not.toHaveBeenCalled();
-    expect(context.store.findWaitlistEntryById(1)).toEqual(before);
-    expectNeutralHeaders(response);
-    await context.app.close();
-  });
+      expect(context.clock.now).not.toHaveBeenCalled();
+      expect(context.store.findWaitlistEntryById(1)).toEqual(before);
+      expectNeutralHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it('uses exactly the framework single-decoded token', async () => {
     const context = await createTestContext();
@@ -292,7 +295,9 @@ describe('POST /api/waitlist-entries/:privateToken/cancellations', () => {
         .expect(404, { kind: 'not-found' });
 
       expect(context.clock.now).not.toHaveBeenCalled();
-      expect(context.store.findWaitlistEntryById(entry?.id ?? 0)).toEqual(entry);
+      expect(context.store.findWaitlistEntryById(entry?.id ?? 0)).toEqual(
+        entry,
+      );
       expectNeutralHeaders(response);
       await context.app.close();
     },
@@ -334,7 +339,9 @@ describe('POST /api/waitlist-entries/:privateToken/cancellations', () => {
       ),
     ]);
 
-    expect(responses.map((response) => response.status).sort()).toEqual([200, 404]);
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      200, 404,
+    ]);
     expect(context.clock.now).toHaveBeenCalledTimes(1);
     expect(context.store.findWaitlistEntryById(1)).toMatchObject({
       status: 'cancelled',
@@ -370,9 +377,9 @@ describe('POST /api/waitlist-entries/:privateToken/cancellations', () => {
       actionReference: beforeSecond?.actionReference,
       status: 'cancelled',
     });
-    expect(context.store.listActiveWaitlistEntries(1).map((entry) => entry.id)).toEqual([
-      2,
-    ]);
+    expect(
+      context.store.listActiveWaitlistEntries(1).map((entry) => entry.id),
+    ).toEqual([2]);
     await context.app.close();
   });
 
@@ -415,10 +422,9 @@ describe('POST /api/waitlist-entries/:privateToken/cancellations', () => {
       );
       expectNeutralHeaders(response);
       expect(context.store.findWaitlistEntryById(1)).toEqual(before);
-      expect(context.store.listActiveWaitlistEntries(1).map((entry) => entry.id)).toEqual([
-        1,
-        2,
-      ]);
+      expect(
+        context.store.listActiveWaitlistEntries(1).map((entry) => entry.id),
+      ).toEqual([1, 2]);
       expect(context.clock.now).toHaveBeenCalledTimes(1);
       expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
       logs.forEach((log) => log.mockRestore());
@@ -521,7 +527,11 @@ describe('atomic private-token cancellation store operation', () => {
 
     expect(store.cancelWaitlistEntry('atomic-token', now)).toMatchObject({
       kind: 'cancelled',
-      entry: { id: entry.id, status: 'cancelled', resolvedAt: cancellationTime },
+      entry: {
+        id: entry.id,
+        status: 'cancelled',
+        resolvedAt: cancellationTime,
+      },
     });
     expect(now).toHaveBeenCalledTimes(1);
     expect(store.cancelWaitlistEntry('atomic-token', now)).toEqual({

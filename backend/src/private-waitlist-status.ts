@@ -52,9 +52,7 @@ export class PrivateWaitlistStatusController {
     '/api/waitlist-entries/{privateToken}/cancellations',
     'post',
   )
-  cancel(
-    @Param('privateToken') privateToken: string,
-  ): { kind: 'cancelled' } {
+  cancel(@Param('privateToken') privateToken: string): { kind: 'cancelled' } {
     const result = this.store.cancelWaitlistEntry(privateToken, () =>
       this.clock.now(),
     );

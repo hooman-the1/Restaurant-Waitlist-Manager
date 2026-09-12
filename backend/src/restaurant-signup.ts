@@ -1,10 +1,4 @@
-import {
-  Body,
-  Controller,
-  Injectable,
-  Optional,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Injectable, Optional, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiTags } from '@nestjs/swagger';
 import { argon2id, hash as argon2Hash } from 'argon2';
@@ -49,7 +43,9 @@ export class FrontendOrigin {
   constructor(@Optional() private readonly config?: ConfigService) {}
 
   get(): string {
-    return this.config?.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:4200';
+    return (
+      this.config?.get<string>('FRONTEND_ORIGIN') ?? 'http://localhost:4200'
+    );
   }
 }
 
@@ -74,7 +70,9 @@ export class RestaurantSignupController {
 
   @Post()
   @ApiContractOperation('/api/restaurants', 'post')
-  async signup(@Body() input: RestaurantSignupDto): Promise<{ kind: 'success' }> {
+  async signup(
+    @Body() input: RestaurantSignupDto,
+  ): Promise<{ kind: 'success' }> {
     const name = normalizeRestaurantDisplayName(input.restaurantName);
     if (name.length === 0) {
       throw validationFailure('Restaurant name is required.');

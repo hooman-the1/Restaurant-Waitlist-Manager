@@ -47,8 +47,9 @@ async function createTestContext(options?: {
   });
   if (options !== undefined && 'signedCookieValue' in options) {
     app.use((incoming: Request, _response: Response, next: NextFunction) => {
-      (incoming as unknown as { signedCookies: Record<string, unknown> })
-        .signedCookies = { restaurant_session: options.signedCookieValue };
+      (
+        incoming as unknown as { signedCookies: Record<string, unknown> }
+      ).signedCookies = { restaurant_session: options.signedCookieValue };
       next();
     });
   }
@@ -176,11 +177,9 @@ describe('GET /api/dashboard', () => {
       'phone',
       'position',
     ]);
-    expect(Object.keys(response.body.dashboard.resolvedToday[0]).sort()).toEqual([
-      'customerName',
-      'finalStatus',
-      'partySize',
-    ]);
+    expect(
+      Object.keys(response.body.dashboard.resolvedToday[0]).sort(),
+    ).toEqual(['customerName', 'finalStatus', 'partySize']);
     expect(context.clock.now).toHaveBeenCalledTimes(1);
     expectDashboardHeaders(response);
     await context.app.close();
@@ -370,29 +369,32 @@ describe('GET /api/dashboard', () => {
     ['wrong secret', sessionCookie('demo-restaurant', 'wrong-secret')],
     ['empty', sessionCookie('')],
     ['unknown', sessionCookie('unknown')],
-  ])('returns cached-disabled unauthorized for a %s session', async (_case, cookie) => {
-    const context = await createTestContext();
-    const readableStore = context.store as InMemoryStore & {
-      readDashboardSnapshot(restaurantId: number, now: Date): unknown;
-    };
-    const dashboardRead = jest.spyOn(readableStore, 'readDashboardSnapshot');
-    const logs = [
-      jest.spyOn(console, 'log').mockImplementation(() => undefined),
-      jest.spyOn(console, 'warn').mockImplementation(() => undefined),
-      jest.spyOn(console, 'error').mockImplementation(() => undefined),
-    ];
-    const call = request(context.app.getHttpServer()).get('/api/dashboard');
-    if (cookie !== undefined) {
-      call.set('Cookie', cookie);
-    }
-    const response = await call.expect(401, { kind: 'unauthorized' });
-    expect(context.clock.now).not.toHaveBeenCalled();
-    expect(dashboardRead).not.toHaveBeenCalled();
-    expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
-    logs.forEach((log) => log.mockRestore());
-    expectDashboardHeaders(response);
-    await context.app.close();
-  });
+  ])(
+    'returns cached-disabled unauthorized for a %s session',
+    async (_case, cookie) => {
+      const context = await createTestContext();
+      const readableStore = context.store as InMemoryStore & {
+        readDashboardSnapshot(restaurantId: number, now: Date): unknown;
+      };
+      const dashboardRead = jest.spyOn(readableStore, 'readDashboardSnapshot');
+      const logs = [
+        jest.spyOn(console, 'log').mockImplementation(() => undefined),
+        jest.spyOn(console, 'warn').mockImplementation(() => undefined),
+        jest.spyOn(console, 'error').mockImplementation(() => undefined),
+      ];
+      const call = request(context.app.getHttpServer()).get('/api/dashboard');
+      if (cookie !== undefined) {
+        call.set('Cookie', cookie);
+      }
+      const response = await call.expect(401, { kind: 'unauthorized' });
+      expect(context.clock.now).not.toHaveBeenCalled();
+      expect(dashboardRead).not.toHaveBeenCalled();
+      expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
+      logs.forEach((log) => log.mockRestore());
+      expectDashboardHeaders(response);
+      await context.app.close();
+    },
+  );
 
   it('rejects a non-string signed-cookie value before dashboard work', async () => {
     const context = await createTestContext({ signedCookieValue: 42 });
@@ -418,9 +420,11 @@ describe('GET /api/dashboard', () => {
 
   it('sanitizes an unexpected authentication-guard failure with no-store', async () => {
     const context = await createTestContext();
-    jest.spyOn(context.sessionGuard, 'canActivate').mockImplementationOnce(() => {
-      throw new Error('private guard failure');
-    });
+    jest
+      .spyOn(context.sessionGuard, 'canActivate')
+      .mockImplementationOnce(() => {
+        throw new Error('private guard failure');
+      });
     const logs = [
       jest.spyOn(console, 'log').mockImplementation(() => undefined),
       jest.spyOn(console, 'warn').mockImplementation(() => undefined),
@@ -441,7 +445,9 @@ describe('GET /api/dashboard', () => {
     'sanitizes a %s failure without leaking or mutating data',
     async (failure) => {
       const context = await createTestContext();
-      const before = [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id));
+      const before = [1, 2, 3].map((id) =>
+        context.store.findWaitlistEntryById(id),
+      );
       if (failure === 'clock') {
         context.clock.now.mockImplementationOnce(() => {
           throw new Error('private dashboard clock');
@@ -450,11 +456,11 @@ describe('GET /api/dashboard', () => {
         const readableStore = context.store as InMemoryStore & {
           readDashboardSnapshot(restaurantId: number, now: Date): unknown;
         };
-        jest.spyOn(readableStore, 'readDashboardSnapshot').mockImplementationOnce(
-          () => {
+        jest
+          .spyOn(readableStore, 'readDashboardSnapshot')
+          .mockImplementationOnce(() => {
             throw new Error('private dashboard store Morgan 555');
-          },
-        );
+          });
       }
       const logs = [
         jest.spyOn(console, 'log').mockImplementation(() => undefined),
@@ -469,9 +475,9 @@ describe('GET /api/dashboard', () => {
       expect(JSON.stringify(response.body)).not.toMatch(
         /private|dashboard|clock|store|Morgan|555|demo-restaurant|stack/i,
       );
-      expect([1, 2, 3].map((id) => context.store.findWaitlistEntryById(id))).toEqual(
-        before,
-      );
+      expect(
+        [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id)),
+      ).toEqual(before);
       expect(logs.every((log) => log.mock.calls.length === 0)).toBe(true);
       logs.forEach((log) => log.mockRestore());
       expectDashboardHeaders(response);
@@ -494,8 +500,12 @@ describe('GET /api/dashboard', () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /email|normalized|slug|publicUrl|password|verified|restaurantId|entryId|privateStatus|joinedAt|resolvedAt|queueTotal|analytics|session/i,
     );
-    expect(response.body.dashboard.activeEntries[0]).not.toHaveProperty('status');
-    expect(response.body.dashboard.resolvedToday[0]).not.toHaveProperty('phone');
+    expect(response.body.dashboard.activeEntries[0]).not.toHaveProperty(
+      'status',
+    );
+    expect(response.body.dashboard.resolvedToday[0]).not.toHaveProperty(
+      'phone',
+    );
     expect(response.body.dashboard.resolvedToday[0]).not.toHaveProperty(
       'actionReference',
     );
@@ -520,8 +530,10 @@ describe('GET /api/dashboard', () => {
       (entry: { customerName: string }) => entry.customerName,
     );
     expect(
-      (activeIds.includes('Morgan Lee') && !resolvedIds.includes('Morgan Lee')) ||
-        (!activeIds.includes('Morgan Lee') && resolvedIds.includes('Morgan Lee')),
+      (activeIds.includes('Morgan Lee') &&
+        !resolvedIds.includes('Morgan Lee')) ||
+        (!activeIds.includes('Morgan Lee') &&
+          resolvedIds.includes('Morgan Lee')),
     ).toBe(true);
     expect(
       response.body.dashboard.activeEntries.map(
@@ -560,7 +572,9 @@ describe('GET /api/dashboard', () => {
 
   it('keeps repeated and concurrent reads fully read-only, including counters', async () => {
     const context = await createTestContext();
-    const before = [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id));
+    const before = [1, 2, 3].map((id) =>
+      context.store.findWaitlistEntryById(id),
+    );
     await Promise.all(
       Array.from({ length: 12 }, () =>
         request(context.app.getHttpServer())
@@ -569,9 +583,9 @@ describe('GET /api/dashboard', () => {
       ),
     );
 
-    expect([1, 2, 3].map((id) => context.store.findWaitlistEntryById(id))).toEqual(
-      before,
-    );
+    expect(
+      [1, 2, 3].map((id) => context.store.findWaitlistEntryById(id)),
+    ).toEqual(before);
     expect(createRestaurant(context.store, 'after-reads').id).toBe(2);
     expect(createEntry(context.store, 1, 'after-reads').id).toBe(4);
     expect(context.clock.now).toHaveBeenCalledTimes(12);

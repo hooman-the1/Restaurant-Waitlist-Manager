@@ -17,9 +17,12 @@ describe('restaurant name utilities', () => {
     [' \t\r\n ', ''],
     ['\u00a0Café\u2003Grill\u00a0', 'Café Grill'],
     ['  Café 😀, Inc.  ', 'Café 😀, Inc.'],
-  ])('normalizes display name %p without changing visible characters', (input, expected) => {
-    expect(normalizeRestaurantDisplayName(input)).toBe(expected);
-  });
+  ])(
+    'normalizes display name %p without changing visible characters',
+    (input, expected) => {
+      expect(normalizeRestaurantDisplayName(input)).toBe(expected);
+    },
+  );
 
   it('normalizes restaurant names for locale-independent comparison', () => {
     expect(normalizeRestaurantNameForComparison('  THE   Garden ')).toBe(
@@ -74,9 +77,12 @@ describe('phone comparison', () => {
     ['555.010\t–1000', '555.010\t–1000'],
     [' ( - ) ', ''],
     ['+44.20\t1234\u00a0–5678', '+44.20\t1234\u00a0–5678'],
-  ])('removes only the four ASCII formatting characters from %p', (input, expected) => {
-    expect(normalizePhoneForComparison(input)).toBe(expected);
-  });
+  ])(
+    'removes only the four ASCII formatting characters from %p',
+    (input, expected) => {
+      expect(normalizePhoneForComparison(input)).toBe(expected);
+    },
+  );
 });
 
 describe('display-value preservation', () => {

@@ -86,19 +86,22 @@ describe('API documentation', () => {
   it.each([
     ['/docs', 'Swagger UI'],
     ['/redoc', 'API Reference'],
-  ])('serves the public canonical %s HTML referencing /openapi.json', async (path, marker) => {
-    const response = await request(app.getHttpServer())
-      .get(path)
-      .set('Cookie', 'restaurant_session=s%3Ainvalid.invalid')
-      .expect(200);
+  ])(
+    'serves the public canonical %s HTML referencing /openapi.json',
+    async (path, marker) => {
+      const response = await request(app.getHttpServer())
+        .get(path)
+        .set('Cookie', 'restaurant_session=s%3Ainvalid.invalid')
+        .expect(200);
 
-    expect(response.headers['content-type']).toMatch(/^text\/html/);
-    expect(response.text).toContain(marker);
-    expect(response.text).toContain('/openapi.json');
-    expect(response.headers.location).toBeUndefined();
-    expect(response.headers['set-cookie']).toBeUndefined();
-    expect(response.text).not.toContain('documentation-test-secret');
-  });
+      expect(response.headers['content-type']).toMatch(/^text\/html/);
+      expect(response.text).toContain(marker);
+      expect(response.text).toContain('/openapi.json');
+      expect(response.headers.location).toBeUndefined();
+      expect(response.headers['set-cookie']).toBeUndefined();
+      expect(response.text).not.toContain('documentation-test-secret');
+    },
+  );
 
   it('serves every local UI asset referenced by the documentation pages', async () => {
     const pages = await Promise.all(
@@ -175,10 +178,7 @@ describe('API documentation', () => {
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([
-      200,
-      200,
-      200,
-      200,
+      200, 200, 200, 200,
     ]);
     expect(responses[0].body).toEqual(responses[1].body);
     expect(clock.now).not.toHaveBeenCalled();
@@ -238,70 +238,137 @@ describe('API documentation', () => {
   });
 
   it.each([
-    ['operation', (document: JsonObject) => {
-      delete ((document.paths as JsonObject)['/api/restaurants'] as JsonObject).post;
-    }],
-    ['cookie security', (document: JsonObject) => {
-      (((document.components as JsonObject).securitySchemes as JsonObject)
-        .restaurantSession as JsonObject).name = 'wrong_cookie';
-    }],
-    ['opaque parameter', (document: JsonObject) => {
-      (((document.components as JsonObject).parameters as JsonObject)
-        .PrivateToken as JsonObject).required = false;
-    }],
-    ['response', (document: JsonObject) => {
-      delete (((document.paths as JsonObject)[
-        '/api/restaurant-verifications'
-      ] as JsonObject).post as JsonObject).responses;
-    }],
-    ['request constraint', (document: JsonObject) => {
-      (((((document.components as JsonObject).schemas as JsonObject)
-        .RestaurantSignupInput as JsonObject).properties as JsonObject)
-        .password as JsonObject).minLength = 7;
-    }],
-    ['response field', (document: JsonObject) => {
-      delete (((((document.components as JsonObject).schemas as JsonObject)
-        .DashboardView as JsonObject).properties as JsonObject)
-        .resolvedToday as JsonObject).items;
-    }],
-    ['enum', (document: JsonObject) => {
-      (((document.components as JsonObject).schemas as JsonObject)
-        .FinalStatus as JsonObject).enum = ['seated'];
-    }],
-    ['constant', (document: JsonObject) => {
-      (((((document.components as JsonObject).schemas as JsonObject)
-        .Success as JsonObject).properties as JsonObject).kind as JsonObject)
-        .const = 'wrong';
-    }],
-    ['privacy boundary', (document: JsonObject) => {
-      (((document.components as JsonObject).securitySchemes as JsonObject)
-        .restaurantSession as JsonObject).type = 'http';
-    }],
-  ])('reports a useful material difference for a mutated %s', (_name, mutate) => {
-    const generated = createNestOpenApiDocument(app);
-    const authoritative = loadAuthoritativeOpenApiDocument();
-    mutate(generated as unknown as JsonObject);
+    [
+      'operation',
+      (document: JsonObject) => {
+        delete (
+          (document.paths as JsonObject)['/api/restaurants'] as JsonObject
+        ).post;
+      },
+    ],
+    [
+      'cookie security',
+      (document: JsonObject) => {
+        (
+          ((document.components as JsonObject).securitySchemes as JsonObject)
+            .restaurantSession as JsonObject
+        ).name = 'wrong_cookie';
+      },
+    ],
+    [
+      'opaque parameter',
+      (document: JsonObject) => {
+        (
+          ((document.components as JsonObject).parameters as JsonObject)
+            .PrivateToken as JsonObject
+        ).required = false;
+      },
+    ],
+    [
+      'response',
+      (document: JsonObject) => {
+        delete (
+          (
+            (document.paths as JsonObject)[
+              '/api/restaurant-verifications'
+            ] as JsonObject
+          ).post as JsonObject
+        ).responses;
+      },
+    ],
+    [
+      'request constraint',
+      (document: JsonObject) => {
+        (
+          (
+            (
+              ((document.components as JsonObject).schemas as JsonObject)
+                .RestaurantSignupInput as JsonObject
+            ).properties as JsonObject
+          ).password as JsonObject
+        ).minLength = 7;
+      },
+    ],
+    [
+      'response field',
+      (document: JsonObject) => {
+        delete (
+          (
+            (
+              ((document.components as JsonObject).schemas as JsonObject)
+                .DashboardView as JsonObject
+            ).properties as JsonObject
+          ).resolvedToday as JsonObject
+        ).items;
+      },
+    ],
+    [
+      'enum',
+      (document: JsonObject) => {
+        (
+          ((document.components as JsonObject).schemas as JsonObject)
+            .FinalStatus as JsonObject
+        ).enum = ['seated'];
+      },
+    ],
+    [
+      'constant',
+      (document: JsonObject) => {
+        (
+          (
+            (
+              ((document.components as JsonObject).schemas as JsonObject)
+                .Success as JsonObject
+            ).properties as JsonObject
+          ).kind as JsonObject
+        ).const = 'wrong';
+      },
+    ],
+    [
+      'privacy boundary',
+      (document: JsonObject) => {
+        (
+          ((document.components as JsonObject).securitySchemes as JsonObject)
+            .restaurantSession as JsonObject
+        ).type = 'http';
+      },
+    ],
+  ])(
+    'reports a useful material difference for a mutated %s',
+    (_name, mutate) => {
+      const generated = createNestOpenApiDocument(app);
+      const authoritative = loadAuthoritativeOpenApiDocument();
+      mutate(generated as unknown as JsonObject);
 
-    expect(() => assertOpenApiParity(generated, authoritative)).toThrow(
-      /OpenAPI contract drift at \//,
-    );
-  });
+      expect(() => assertOpenApiParity(generated, authoritative)).toThrow(
+        /OpenAPI contract drift at \//,
+      );
+    },
+  );
 
   it('detects an authoritative YAML-side mutation at its material JSON pointer', () => {
-    const authoritative = clone(loadAuthoritativeOpenApiDocument()) as unknown as JsonObject;
-    (((((authoritative.components as JsonObject).schemas as JsonObject)
-      .JoinWaitlistInput as JsonObject).properties as JsonObject)
-      .partySize as JsonObject).maximum = 31;
+    const authoritative = clone(
+      loadAuthoritativeOpenApiDocument(),
+    ) as unknown as JsonObject;
+    (
+      (
+        (
+          ((authoritative.components as JsonObject).schemas as JsonObject)
+            .JoinWaitlistInput as JsonObject
+        ).properties as JsonObject
+      ).partySize as JsonObject
+    ).maximum = 31;
 
-    expect(() =>
-      assertAuthoritativeContractFingerprint(authoritative),
-    ).toThrow(
+    expect(() => assertAuthoritativeContractFingerprint(authoritative)).toThrow(
       'OpenAPI contract drift at /components/schemas/JoinWaitlistInput',
     );
   });
 
   it('resolves the root contract rather than a generated backend artifact', () => {
-    const rootYaml = readFileSync(resolve(__dirname, '../../openapi.yaml'), 'utf8');
+    const rootYaml = readFileSync(
+      resolve(__dirname, '../../openapi.yaml'),
+      'utf8',
+    );
     expect(rootYaml).toContain('openapi: 3.1.0');
     expect(loadAuthoritativeOpenApiDocument()).toEqual(
       expect.objectContaining({ openapi: '3.1.0' }),

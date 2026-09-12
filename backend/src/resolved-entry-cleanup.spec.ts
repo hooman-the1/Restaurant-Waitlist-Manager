@@ -104,7 +104,9 @@ describe('InMemoryStore resolved-entry cleanup', () => {
     expect(store.findWaitlistEntryById(boundary.id)).toEqual(boundary);
     expect(store.findWaitlistEntryById(future.id)).toEqual(future);
     expect(store.findWaitlistEntryById(active.id)).toEqual(active);
-    expect(store.findWaitlistEntryById(currentOrphan.id)).toEqual(currentOrphan);
+    expect(store.findWaitlistEntryById(currentOrphan.id)).toEqual(
+      currentOrphan,
+    );
     expect(store.findWaitlistEntryById(activeOrphan.id)).toEqual(activeOrphan);
     expect(store.removeResolvedWaitlistEntriesBefore(startOfToday)).toBe(0);
   });
@@ -180,7 +182,12 @@ describe('ResolvedEntryCleanup', () => {
   it('contains scheduled failures, reports no sensitive error detail, and permits a complete retry', () => {
     const store = new InMemoryStore();
     store.createWaitlistEntry(
-      entryInput('sensitive-customer-token', 'seated', new Date(2026, 8, 1), 999),
+      entryInput(
+        'sensitive-customer-token',
+        'seated',
+        new Date(2026, 8, 1),
+        999,
+      ),
     );
     const failure = new Error('private-sensitive-customer-token');
     const cleanupStore = jest
@@ -298,7 +305,10 @@ describe('ResolvedEntryCleanup', () => {
     expect(dashboardBefore).toEqual({
       restaurantName: 'Test Restaurant',
       activeEntries: [
-        expect.objectContaining({ position: 1, customerName: 'Customer snapshot-active' }),
+        expect.objectContaining({
+          position: 1,
+          customerName: 'Customer snapshot-active',
+        }),
       ],
       resolvedToday: [
         expect.objectContaining({
@@ -315,8 +325,14 @@ describe('ResolvedEntryCleanup', () => {
     expect(store.readDashboardSnapshot(1, new Date(today))).toEqual({
       restaurantName: 'Test Restaurant',
       activeEntries: [
-        expect.objectContaining({ position: 1, customerName: 'Customer snapshot-active' }),
-        expect.objectContaining({ position: 2, customerName: 'Joined During Race' }),
+        expect.objectContaining({
+          position: 1,
+          customerName: 'Customer snapshot-active',
+        }),
+        expect.objectContaining({
+          position: 2,
+          customerName: 'Joined During Race',
+        }),
       ],
       resolvedToday: dashboardBefore?.resolvedToday,
     });
@@ -346,8 +362,9 @@ describe('ResolvedEntryCleanup', () => {
 
     const results = await Promise.all([
       Promise.resolve().then(() =>
-        store.cancelWaitlistEntry(cancelBefore.privateStatusToken, () =>
-          new Date(oldResolutionTime),
+        store.cancelWaitlistEntry(
+          cancelBefore.privateStatusToken,
+          () => new Date(oldResolutionTime),
         ),
       ),
       Promise.resolve().then(() =>
@@ -360,8 +377,9 @@ describe('ResolvedEntryCleanup', () => {
       ),
       Promise.resolve().then(() => cleanup.run()),
       Promise.resolve().then(() =>
-        store.cancelWaitlistEntry(cancelAfter.privateStatusToken, () =>
-          new Date(oldResolutionTime),
+        store.cancelWaitlistEntry(
+          cancelAfter.privateStatusToken,
+          () => new Date(oldResolutionTime),
         ),
       ),
       Promise.resolve().then(() =>
@@ -381,18 +399,26 @@ describe('ResolvedEntryCleanup', () => {
       expect.objectContaining({ kind: 'cancelled' }),
       expect.objectContaining({ kind: 'resolved' }),
     ]);
-    expect(store.readPrivateWaitlistStatus(cancelBefore.privateStatusToken)).toEqual({
+    expect(
+      store.readPrivateWaitlistStatus(cancelBefore.privateStatusToken),
+    ).toEqual({
       kind: 'not-found',
     });
-    expect(store.readPrivateWaitlistStatus(resolveBefore.privateStatusToken)).toEqual({
+    expect(
+      store.readPrivateWaitlistStatus(resolveBefore.privateStatusToken),
+    ).toEqual({
       kind: 'not-found',
     });
-    expect(store.readPrivateWaitlistStatus(cancelAfter.privateStatusToken)).toEqual({
+    expect(
+      store.readPrivateWaitlistStatus(cancelAfter.privateStatusToken),
+    ).toEqual({
       kind: 'resolved',
       restaurantName: 'Test Restaurant',
       finalStatus: 'cancelled',
     });
-    expect(store.readPrivateWaitlistStatus(resolveAfter.privateStatusToken)).toEqual({
+    expect(
+      store.readPrivateWaitlistStatus(resolveAfter.privateStatusToken),
+    ).toEqual({
       kind: 'resolved',
       restaurantName: 'Test Restaurant',
       finalStatus: 'no-show',
@@ -425,11 +451,15 @@ describe('resolved-entry cleanup lifecycle', () => {
     await app.init();
 
     expect(now).toHaveBeenCalledTimes(2);
-    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(2);
+    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(
+      2,
+    );
     expect(
       module
         .get(InMemoryStore)
-        .findWaitlistEntryByPrivateStatusToken(DEMO_ACCESS.resolvedPrivateStatusToken),
+        .findWaitlistEntryByPrivateStatusToken(
+          DEMO_ACCESS.resolvedPrivateStatusToken,
+        ),
     ).toBeDefined();
     await app.close();
   });
@@ -448,9 +478,13 @@ describe('resolved-entry cleanup lifecycle', () => {
     expect(
       module
         .get(InMemoryStore)
-        .findWaitlistEntryByPrivateStatusToken(DEMO_ACCESS.resolvedPrivateStatusToken),
+        .findWaitlistEntryByPrivateStatusToken(
+          DEMO_ACCESS.resolvedPrivateStatusToken,
+        ),
     ).toBeUndefined();
-    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(2);
+    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(
+      2,
+    );
     await app.close();
   });
 
@@ -464,8 +498,12 @@ describe('resolved-entry cleanup lifecycle', () => {
     const { module, app } = await compileWithClock(now);
 
     await expect(app.init()).rejects.toThrow('clock unavailable');
-    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(2);
-    expect(module.get(InMemoryStore).listResolvedWaitlistEntries(1)).toHaveLength(1);
+    expect(module.get(InMemoryStore).listActiveWaitlistEntries(1)).toHaveLength(
+      2,
+    );
+    expect(
+      module.get(InMemoryStore).listResolvedWaitlistEntries(1),
+    ).toHaveLength(1);
     await app.close();
   });
 
@@ -562,7 +600,9 @@ describe('resolved-entry cleanup lifecycle', () => {
 
 describe('CleanupFailureReporter', () => {
   it('emits only a stable sanitized message', () => {
-    const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const error = jest
+      .spyOn(console, 'error')
+      .mockImplementation(() => undefined);
     new CleanupFailureReporter().report();
     expect(error).toHaveBeenCalledWith('Resolved-entry cleanup failed.');
     error.mockRestore();

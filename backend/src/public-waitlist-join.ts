@@ -66,9 +66,7 @@ export class PublicWaitlistJoinController {
     if (!/^\+?[0-9]+$/.test(normalizedPhone)) {
       throw validationFailure('Enter a valid phone number.');
     }
-    if (
-      this.store.hasActivePhoneDuplicate(restaurant.id, normalizedPhone)
-    ) {
+    if (this.store.hasActivePhoneDuplicate(restaurant.id, normalizedPhone)) {
       throw duplicatePhoneFailure();
     }
 

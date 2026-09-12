@@ -42,9 +42,13 @@ async function createTestContext(overrides?: {
   log?: (line: string) => void;
   frontendOrigin?: string;
 }): Promise<TestContext> {
-  const hasher = { hash: jest.fn(overrides?.hash ?? (async (value) => `hash:${value}`)) };
+  const hasher = {
+    hash: jest.fn(overrides?.hash ?? (async (value) => `hash:${value}`)),
+  };
   const tokenSource = {
-    generate: jest.fn(overrides?.generate ?? (() => '10000000-0000-4000-8000-000000000001')),
+    generate: jest.fn(
+      overrides?.generate ?? (() => '10000000-0000-4000-8000-000000000001'),
+    ),
   };
   const clock = { now: jest.fn(overrides?.now ?? (() => new Date(fixedNow))) };
   const logger = { log: jest.fn(overrides?.log ?? (() => undefined)) };
@@ -54,7 +58,9 @@ async function createTestContext(overrides?: {
     .overrideProvider(VerificationTokenSource)
     .useValue(tokenSource)
     .overrideProvider(FrontendOrigin)
-    .useValue({ get: () => overrides?.frontendOrigin ?? 'http://localhost:4200' })
+    .useValue({
+      get: () => overrides?.frontendOrigin ?? 'http://localhost:4200',
+    })
     .overrideProvider(VerificationUrlLogger)
     .useValue(logger)
     .overrideProvider(SystemClock)
@@ -114,7 +120,11 @@ describe('POST /api/restaurants', () => {
       verified: false,
       createdAt: fixedNow,
     });
-    expect(context.store.findVerificationToken('10000000-0000-4000-8000-000000000001')).toEqual({
+    expect(
+      context.store.findVerificationToken(
+        '10000000-0000-4000-8000-000000000001',
+      ),
+    ).toEqual({
       token: '10000000-0000-4000-8000-000000000001',
       restaurantId: 2,
     });
@@ -129,45 +139,65 @@ describe('POST /api/restaurants', () => {
 
   it.each([
     [{}, { kind: 'validation', message: 'Invalid request.' }],
-    [{ ...validSignup, password: 'short' }, { kind: 'validation', message: 'Invalid request.' }],
-    [{ ...validSignup, email: 1 }, { kind: 'validation', message: 'Invalid request.' }],
-    [{ ...validSignup, extra: true }, { kind: 'validation', message: 'Invalid request.' }],
-  ])('rejects transport-invalid input without mutation or logging', async (body, expected) => {
-    const context = await createTestContext();
+    [
+      { ...validSignup, password: 'short' },
+      { kind: 'validation', message: 'Invalid request.' },
+    ],
+    [
+      { ...validSignup, email: 1 },
+      { kind: 'validation', message: 'Invalid request.' },
+    ],
+    [
+      { ...validSignup, extra: true },
+      { kind: 'validation', message: 'Invalid request.' },
+    ],
+  ])(
+    'rejects transport-invalid input without mutation or logging',
+    async (body, expected) => {
+      const context = await createTestContext();
 
-    await request(context.app.getHttpServer())
-      .post('/api/restaurants')
-      .send(body)
-      .expect(400, expected);
+      await request(context.app.getHttpServer())
+        .post('/api/restaurants')
+        .send(body)
+        .expect(400, expected);
 
-    expect(context.store.findRestaurantById(2)).toBeUndefined();
-    expect(context.hasher.hash).not.toHaveBeenCalled();
-    expect(context.logger.log).not.toHaveBeenCalled();
-    await context.app.close();
-  });
+      expect(context.store.findRestaurantById(2)).toBeUndefined();
+      expect(context.hasher.hash).not.toHaveBeenCalled();
+      expect(context.logger.log).not.toHaveBeenCalled();
+      await context.app.close();
+    },
+  );
 
   it.each([
     ['   \t ', 'owner@example.com', 'password', 'Restaurant name is required.'],
-    ['***', 'owner@example.com', 'password', 'Restaurant name must contain a letter or number.'],
+    [
+      '***',
+      'owner@example.com',
+      'password',
+      'Restaurant name must contain a letter or number.',
+    ],
     ['Valid', 'owner @example.com', 'password', 'Enter a valid email address.'],
     ['Valid', 'owner@@example.com', 'password', 'Enter a valid email address.'],
     ['Valid', '@example.com', 'password', 'Enter a valid email address.'],
     ['Valid', 'owner@', 'password', 'Enter a valid email address.'],
     ['Valid', 'owner@localhost', 'password', 'Enter a valid email address.'],
     ['Valid', 'owner@example..com', 'password', 'Enter a valid email address.'],
-  ])('returns the deterministic business validation result', async (name, email, password, message) => {
-    const context = await createTestContext();
+  ])(
+    'returns the deterministic business validation result',
+    async (name, email, password, message) => {
+      const context = await createTestContext();
 
-    await request(context.app.getHttpServer())
-      .post('/api/restaurants')
-      .send({ restaurantName: name, email, password })
-      .expect(400, { kind: 'validation', message });
+      await request(context.app.getHttpServer())
+        .post('/api/restaurants')
+        .send({ restaurantName: name, email, password })
+        .expect(400, { kind: 'validation', message });
 
-    expect(context.store.findRestaurantById(2)).toBeUndefined();
-    expect(context.hasher.hash).not.toHaveBeenCalled();
-    expect(context.logger.log).not.toHaveBeenCalled();
-    await context.app.close();
-  });
+      expect(context.store.findRestaurantById(2)).toBeUndefined();
+      expect(context.hasher.hash).not.toHaveBeenCalled();
+      expect(context.logger.log).not.toHaveBeenCalled();
+      await context.app.close();
+    },
+  );
 
   it('applies explicit email and code-point password business guards at the unit seam', async () => {
     const context = await createTestContext();
@@ -219,7 +249,10 @@ describe('POST /api/restaurants', () => {
     await request(context.app.getHttpServer())
       .post('/api/restaurants')
       .send({ restaurantName: '   ', email: 'invalid', password: 'password' })
-      .expect(400, { kind: 'validation', message: 'Restaurant name is required.' });
+      .expect(400, {
+        kind: 'validation',
+        message: 'Restaurant name is required.',
+      });
 
     expect(context.store.findRestaurantById(2)).toBeUndefined();
     expect(context.hasher.hash).not.toHaveBeenCalled();
@@ -235,15 +268,27 @@ describe('POST /api/restaurants', () => {
       .expect(409, conflictBody);
     await request(context.app.getHttpServer())
       .post('/api/restaurants')
-      .send({ ...validSignup, restaurantName: 'A & B', email: 'first@example.com' })
+      .send({
+        ...validSignup,
+        restaurantName: 'A & B',
+        email: 'first@example.com',
+      })
       .expect(201);
     await request(context.app.getHttpServer())
       .post('/api/restaurants')
-      .send({ ...validSignup, restaurantName: 'A---B', email: 'second@example.com' })
+      .send({
+        ...validSignup,
+        restaurantName: 'A---B',
+        email: 'second@example.com',
+      })
       .expect(409, conflictBody);
     await request(context.app.getHttpServer())
       .post('/api/restaurants')
-      .send({ ...validSignup, restaurantName: 'Different', email: ' FIRST@EXAMPLE.COM ' })
+      .send({
+        ...validSignup,
+        restaurantName: 'Different',
+        email: ' FIRST@EXAMPLE.COM ',
+      })
       .expect(409, conflictBody);
 
     expect(context.store.findRestaurantById(3)).toBeUndefined();
@@ -253,7 +298,9 @@ describe('POST /api/restaurants', () => {
 
   it('retries token collisions and persists only the first unused token', async () => {
     const tokens = ['existing', 'existing', 'unused'];
-    const context = await createTestContext({ generate: () => tokens.shift() ?? 'unexpected' });
+    const context = await createTestContext({
+      generate: () => tokens.shift() ?? 'unexpected',
+    });
     context.store.createVerificationToken('existing', 1);
 
     await request(context.app.getHttpServer())
@@ -262,7 +309,9 @@ describe('POST /api/restaurants', () => {
       .expect(201, { kind: 'success' });
 
     expect(context.tokenSource.generate).toHaveBeenCalledTimes(3);
-    expect(context.store.findVerificationToken('existing')?.restaurantId).toBe(1);
+    expect(context.store.findVerificationToken('existing')?.restaurantId).toBe(
+      1,
+    );
     expect(context.store.findVerificationToken('unused')?.restaurantId).toBe(2);
     await context.app.close();
   });
@@ -278,7 +327,9 @@ describe('POST /api/restaurants', () => {
 
     expect(context.tokenSource.generate).toHaveBeenCalledTimes(3);
     expect(context.store.findRestaurantById(2)).toBeUndefined();
-    expect(context.store.findVerificationToken('existing')?.restaurantId).toBe(1);
+    expect(context.store.findVerificationToken('existing')?.restaurantId).toBe(
+      1,
+    );
     expect(context.clock.now).toHaveBeenCalledTimes(2);
     expect(context.logger.log).not.toHaveBeenCalled();
     await context.app.close();
@@ -304,17 +355,27 @@ describe('POST /api/restaurants', () => {
     });
 
     const responses = await Promise.all([
-      request(context.app.getHttpServer()).post('/api/restaurants').send(validSignup),
-      request(context.app.getHttpServer()).post('/api/restaurants').send({
-        ...validSignup,
-        restaurantName: ' new   restaurant ',
-        email: 'different@example.com',
-      }),
+      request(context.app.getHttpServer())
+        .post('/api/restaurants')
+        .send(validSignup),
+      request(context.app.getHttpServer())
+        .post('/api/restaurants')
+        .send({
+          ...validSignup,
+          restaurantName: ' new   restaurant ',
+          email: 'different@example.com',
+        }),
     ]);
 
-    expect(responses.map((response) => response.status).sort()).toEqual([201, 409]);
-    expect(responses.find((response) => response.status === 409)?.body).toEqual(conflictBody);
-    expect(context.store.findRestaurantById(2)?.normalizedName).toBe('new restaurant');
+    expect(responses.map((response) => response.status).sort()).toEqual([
+      201, 409,
+    ]);
+    expect(responses.find((response) => response.status === 409)?.body).toEqual(
+      conflictBody,
+    );
+    expect(context.store.findRestaurantById(2)?.normalizedName).toBe(
+      'new restaurant',
+    );
     expect(context.store.findRestaurantById(3)).toBeUndefined();
     expect(context.logger.log).toHaveBeenCalledTimes(1);
     await context.app.close();
@@ -324,9 +385,22 @@ describe('POST /api/restaurants', () => {
     'rolls back and sanitizes a %s adapter failure',
     async (failure) => {
       const context = await createTestContext({
-        hash: failure === 'hasher' ? async () => Promise.reject(new Error('private hash')) : undefined,
-        generate: failure === 'token' ? () => { throw new Error('private token'); } : undefined,
-        log: failure === 'logger' ? () => { throw new Error('private logger'); } : undefined,
+        hash:
+          failure === 'hasher'
+            ? async () => Promise.reject(new Error('private hash'))
+            : undefined,
+        generate:
+          failure === 'token'
+            ? () => {
+                throw new Error('private token');
+              }
+            : undefined,
+        log:
+          failure === 'logger'
+            ? () => {
+                throw new Error('private logger');
+              }
+            : undefined,
       });
       if (failure === 'clock') {
         context.clock.now.mockImplementationOnce(() => {
@@ -334,9 +408,11 @@ describe('POST /api/restaurants', () => {
         });
       }
       if (failure === 'store') {
-        jest.spyOn(context.store, 'commitRestaurantSignup').mockImplementationOnce(() => {
-          throw new Error('private store');
-        });
+        jest
+          .spyOn(context.store, 'commitRestaurantSignup')
+          .mockImplementationOnce(() => {
+            throw new Error('private store');
+          });
       }
 
       const response = await request(context.app.getHttpServer())
@@ -344,11 +420,15 @@ describe('POST /api/restaurants', () => {
         .send(validSignup)
         .expect(500, unexpectedBody);
 
-      expect(JSON.stringify(response.headers) + JSON.stringify(response.body)).not.toMatch(
-        /password|private|hash:|owner@example|internal/i,
-      );
+      expect(
+        JSON.stringify(response.headers) + JSON.stringify(response.body),
+      ).not.toMatch(/password|private|hash:|owner@example|internal/i);
       expect(context.store.findRestaurantById(2)).toBeUndefined();
-      expect(context.store.findVerificationToken('10000000-0000-4000-8000-000000000001')).toBeUndefined();
+      expect(
+        context.store.findVerificationToken(
+          '10000000-0000-4000-8000-000000000001',
+        ),
+      ).toBeUndefined();
       await context.app.close();
     },
   );
@@ -371,7 +451,9 @@ describe('POST /api/restaurants', () => {
       .send(validSignup)
       .expect(201, { kind: 'success' });
 
-    expect(context.store.findRestaurantById(2)?.email).toBe('owner@example.com');
+    expect(context.store.findRestaurantById(2)?.email).toBe(
+      'owner@example.com',
+    );
     expect(context.store.findRestaurantById(3)).toBeUndefined();
     await context.app.close();
   });
