@@ -1,11 +1,16 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ApiProperty } from '@nestjs/swagger';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import request = require('supertest');
 
 import { configureApplication } from './application-configuration';
 import { AppModule } from './app.module';
+import {
+  DashboardViewResponse,
+  ResolvedDashboardEntryResponse,
+} from './api-contract-models';
 import {
   assertAuthoritativeContractFingerprint,
   assertOpenApiParity,
@@ -14,6 +19,7 @@ import {
 } from './api-documentation';
 import { SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
+import { RestaurantSignupDto } from './request-dtos';
 
 const expectedPaths = [
   '/api/dashboard',
@@ -189,6 +195,46 @@ describe('API documentation', () => {
 
     expect(() => assertOpenApiParity(generated, authoritative)).not.toThrow();
     expect(generated).toEqual(authoritative);
+  });
+
+  it('rejects drift in implementation-side ApiProperty metadata', () => {
+    ApiProperty({
+      example: 'correct-horse',
+      format: 'password',
+      minLength: 7,
+      writeOnly: true,
+    })(RestaurantSignupDto.prototype, 'password');
+
+    try {
+      expect(() => createNestOpenApiDocument(app)).toThrow(
+        'OpenAPI contract drift at /components/schemas/RestaurantSignupInput/properties/password/minLength',
+      );
+    } finally {
+      ApiProperty({
+        example: 'correct-horse',
+        format: 'password',
+        minLength: 8,
+        writeOnly: true,
+      })(RestaurantSignupDto.prototype, 'password');
+    }
+  });
+
+  it('rejects drift in implementation-side response DTO metadata', () => {
+    ApiProperty({
+      type: () => [ResolvedDashboardEntryResponse],
+      description: 'Wrong response description.',
+    })(DashboardViewResponse.prototype, 'resolvedToday');
+
+    try {
+      expect(() => createNestOpenApiDocument(app)).toThrow(
+        'OpenAPI contract drift at /components/schemas/DashboardView/properties/resolvedToday/description',
+      );
+    } finally {
+      ApiProperty({
+        type: () => [ResolvedDashboardEntryResponse],
+        description: 'Entries resolved during the current server-local day.',
+      })(DashboardViewResponse.prototype, 'resolvedToday');
+    }
   });
 
   it.each([

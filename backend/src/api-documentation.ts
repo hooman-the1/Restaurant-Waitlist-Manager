@@ -1,4 +1,4 @@
-import { applyDecorators, INestApplication } from '@nestjs/common';
+import { applyDecorators, INestApplication, Type } from '@nestjs/common';
 import {
   ApiBody,
   ApiCookieAuth,
@@ -17,11 +17,32 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { parse } from 'yaml';
 
+import {
+  applyClosedSchemaMetadata,
+  RESPONSE_MODELS,
+} from './api-contract-models';
+import {
+  JoinWaitlistDto,
+  RestaurantSignupDto,
+  RestaurantVerificationDto,
+  StaffResolutionDto,
+} from './request-dtos';
+
 type JsonObject = Record<string, unknown>;
 type HttpMethod = 'get' | 'post' | 'patch';
 
 const configuredApplications = new WeakSet<INestApplication>();
 const contractPath = resolve(__dirname, '../../openapi.yaml');
+const requestModels: Readonly<Record<string, Type<unknown>>> = Object.freeze({
+  RestaurantSignupInput: RestaurantSignupDto,
+  VerificationInput: RestaurantVerificationDto,
+  JoinWaitlistInput: JoinWaitlistDto,
+  StaffResolutionInput: StaffResolutionDto,
+});
+const apiModels: Readonly<Record<string, Type<unknown>>> = Object.freeze({
+  ...requestModels,
+  ...RESPONSE_MODELS,
+});
 const authoritativeFingerprints: Readonly<Record<string, string>> = Object.freeze({
   '/openapi': '536c8d78e8a0acbef96c0881c0b313c1dc7090176417df5982b2c7c82423ca16',
   '/info': '5ed3ebdaebf208a7e42d1a02450ce0884e862f740976862c9ac5d44f7c242f43',
@@ -106,19 +127,31 @@ export function ApiContractOperation(
   if (requestBody !== undefined) {
     const content = requestBody.content as JsonObject;
     const json = content['application/json'] as JsonObject;
+    const model = modelForSchema(json.schema as JsonObject);
     decorators.push(
       ApiBody({
         required: requestBody.required as boolean,
-        schema: json.schema as Parameters<typeof ApiBody>[0],
+        ...(model === undefined
+          ? { schema: json.schema as Parameters<typeof ApiBody>[0] }
+          : { type: model }),
         ...(json.example === undefined ? {} : { example: json.example }),
       } as unknown as Parameters<typeof ApiBody>[0]),
     );
   }
   for (const [status, response] of Object.entries(responses)) {
+    const resolvedResponse = resolveResponse(contract, response as JsonObject);
+    const responseSchema = getJsonSchema(resolvedResponse);
+    const model =
+      responseSchema === undefined ? undefined : modelForSchema(responseSchema);
+    const responseMetadata = { ...resolvedResponse };
+    if (model !== undefined) {
+      delete responseMetadata.content;
+    }
     decorators.push(
       ApiResponse({
         status: Number(status),
-        ...(response as JsonObject),
+        ...responseMetadata,
+        ...(model === undefined ? {} : { type: model }),
       } as Parameters<typeof ApiResponse>[0]),
     );
   }
@@ -192,7 +225,9 @@ export function createNestOpenApiDocument(
 
   const generated = SwaggerModule.createDocument(app, builder.build(), {
     deepScanRoutes: true,
+    extraModels: Object.values(apiModels),
   });
+  validateGeneratedComponents(generated, authoritative);
   const result = clone(authoritative);
   result.paths = {};
 
@@ -296,6 +331,12 @@ function validateGeneratedOperation(
   }
 
   const normalizedResponses = clone(generated.responses) as JsonObject;
+  const expectedResponses = Object.fromEntries(
+    Object.entries(expected.responses as JsonObject).map(([status, response]) => [
+      status,
+      resolveResponse(contract, response as JsonObject),
+    ]),
+  );
   for (const response of Object.values(normalizedResponses)) {
     if (
       isObject(response) &&
@@ -307,11 +348,75 @@ function validateGeneratedOperation(
   }
   const responseDifference = findDifference(
     normalizedResponses,
-    expected.responses,
+    expectedResponses,
     `${operationPointer}/responses`,
   );
   if (responseDifference !== undefined) {
     throw new Error(`OpenAPI contract drift at ${responseDifference}`);
+  }
+}
+
+function validateGeneratedComponents(
+  generated: OpenAPIObject,
+  authoritative: OpenAPIObject,
+): void {
+  const generatedSchemas = clone(generated.components?.schemas ?? {}) as JsonObject;
+  const expectedSchemas = clone(
+    authoritative.components?.schemas ?? {},
+  ) as JsonObject;
+
+  applyClosedSchemaMetadata(generatedSchemas);
+  normalizeOpenApiDialect(generatedSchemas, expectedSchemas);
+
+  const difference = findDifference(
+    generatedSchemas,
+    expectedSchemas,
+    '/components/schemas',
+  );
+  if (difference !== undefined) {
+    throw new Error(`OpenAPI contract drift at ${difference}`);
+  }
+
+  const securityDifference = findDifference(
+    generated.components?.securitySchemes,
+    authoritative.components?.securitySchemes,
+    '/components/securitySchemes',
+  );
+  if (securityDifference !== undefined) {
+    throw new Error(`OpenAPI contract drift at ${securityDifference}`);
+  }
+}
+
+function normalizeOpenApiDialect(generated: unknown, expected: unknown): void {
+  if (Array.isArray(generated) && Array.isArray(expected)) {
+    generated.forEach((value, index) =>
+      normalizeOpenApiDialect(value, expected[index]),
+    );
+    return;
+  }
+  if (!isObject(generated) || !isObject(expected)) {
+    return;
+  }
+  if (
+    'const' in expected &&
+    Array.isArray(generated.enum) &&
+    generated.enum.length === 1
+  ) {
+    generated.const = generated.enum[0];
+    delete generated.enum;
+  }
+  if (
+    typeof expected.$ref === 'string' &&
+    Array.isArray(generated.allOf) &&
+    generated.allOf.length === 1 &&
+    isObject(generated.allOf[0]) &&
+    typeof generated.allOf[0].$ref === 'string'
+  ) {
+    generated.$ref = generated.allOf[0].$ref;
+    delete generated.allOf;
+  }
+  for (const key of Object.keys(generated)) {
+    normalizeOpenApiDialect(generated[key], expected[key]);
   }
 }
 
@@ -365,6 +470,44 @@ function resolveParameter(
     throw new Error(`Missing OpenAPI parameter metadata for ${reference}.`);
   }
   return resolvedParameter as unknown as JsonObject;
+}
+
+function resolveResponse(
+  contract: OpenAPIObject,
+  response: JsonObject,
+): JsonObject {
+  const reference = response.$ref;
+  if (typeof reference !== 'string') {
+    return response;
+  }
+  const name = reference.split('/').at(-1);
+  const resolvedResponse =
+    name === undefined ? undefined : contract.components?.responses?.[name];
+  if (resolvedResponse === undefined || '$ref' in resolvedResponse) {
+    throw new Error(`Missing OpenAPI response metadata for ${reference}.`);
+  }
+  return resolvedResponse as unknown as JsonObject;
+}
+
+function getJsonSchema(response: JsonObject): JsonObject | undefined {
+  const content = response.content;
+  if (!isObject(content)) {
+    return undefined;
+  }
+  const media = content['application/json'];
+  if (!isObject(media) || !isObject(media.schema)) {
+    return undefined;
+  }
+  return media.schema;
+}
+
+function modelForSchema(schema: JsonObject): Type<unknown> | undefined {
+  const reference = schema.$ref;
+  if (typeof reference !== 'string') {
+    return undefined;
+  }
+  const name = reference.split('/').at(-1);
+  return name === undefined ? undefined : apiModels[name];
 }
 
 function hasRestaurantSessionSecurity(operation: JsonObject): boolean {

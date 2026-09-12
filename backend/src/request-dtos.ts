@@ -7,9 +7,11 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
-import { ApiProperty, ApiSchema } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 
-@ApiSchema({ name: 'RestaurantSignupInput' })
+import { ApiClosedSchema, FinalStatus } from './api-contract-models';
+
+@ApiClosedSchema('RestaurantSignupInput')
 export class RestaurantSignupDto {
   @ApiProperty({
     example: 'Demo Restaurant',
@@ -42,7 +44,7 @@ export class RestaurantSignupDto {
   password!: string;
 }
 
-@ApiSchema({ name: 'VerificationInput' })
+@ApiClosedSchema('VerificationInput')
 export class RestaurantVerificationDto {
   @ApiProperty({
     example: 'verification-opaque-token',
@@ -55,7 +57,7 @@ export class RestaurantVerificationDto {
   token!: string;
 }
 
-@ApiSchema({ name: 'JoinWaitlistInput' })
+@ApiClosedSchema('JoinWaitlistInput')
 export class JoinWaitlistDto {
   @ApiProperty({
     example: 'Morgan Lee',
@@ -83,12 +85,12 @@ export class JoinWaitlistDto {
   partySize!: number;
 }
 
-@ApiSchema({ name: 'StaffResolutionInput' })
+@ApiClosedSchema('StaffResolutionInput')
 export class StaffResolutionDto {
   @ApiProperty({
-    enum: ['seated', 'cancelled', 'no-show'],
-    example: 'seated',
+    enum: FinalStatus,
+    enumName: 'FinalStatus',
   })
   @IsIn(['seated', 'cancelled', 'no-show'])
-  resolution!: 'seated' | 'cancelled' | 'no-show';
+  resolution!: FinalStatus;
 }
