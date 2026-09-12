@@ -119,7 +119,7 @@ describe('POST /api/restaurants', () => {
       restaurantId: 2,
     });
     expect(context.hasher.hash).toHaveBeenCalledWith('password');
-    expect(context.clock.now).toHaveBeenCalledTimes(2);
+    expect(context.clock.now).toHaveBeenCalledTimes(3);
     expect(context.logger.log).toHaveBeenCalledWith(
       'Restaurant verification URL: http://localhost:4200/verify/10000000-0000-4000-8000-000000000001',
     );
@@ -279,7 +279,7 @@ describe('POST /api/restaurants', () => {
     expect(context.tokenSource.generate).toHaveBeenCalledTimes(3);
     expect(context.store.findRestaurantById(2)).toBeUndefined();
     expect(context.store.findVerificationToken('existing')?.restaurantId).toBe(1);
-    expect(context.clock.now).toHaveBeenCalledTimes(1);
+    expect(context.clock.now).toHaveBeenCalledTimes(2);
     expect(context.logger.log).not.toHaveBeenCalled();
     await context.app.close();
   });

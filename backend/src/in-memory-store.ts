@@ -625,6 +625,33 @@ export class InMemoryStore {
     return this.waitlistEntries.delete(id);
   }
 
+  removeResolvedWaitlistEntriesBefore(cutoff: Date): number {
+    const originalEntries = [...this.waitlistEntries.entries()];
+    const expiredIds = originalEntries
+      .filter(
+        ([, entry]) =>
+          entry.status !== 'active' &&
+          entry.resolvedAt.getTime() < cutoff.getTime(),
+      )
+      .map(([id]) => id);
+
+    try {
+      for (const id of expiredIds) {
+        if (!this.waitlistEntries.delete(id)) {
+          throw new Error('Resolved-entry cleanup failed.');
+        }
+      }
+    } catch (error: unknown) {
+      this.waitlistEntries.clear();
+      for (const [id, entry] of originalEntries) {
+        this.waitlistEntries.set(id, entry);
+      }
+      throw error;
+    }
+
+    return expiredIds.length;
+  }
+
   reset(): void {
     this.restaurants.clear();
     this.verificationTokens.clear();

@@ -51,7 +51,7 @@ describe('DemoDataSeeder', () => {
     });
     expect(store.findRestaurantById(2)).toBeUndefined();
     expect(store.findVerificationToken(DEMO_ACCESS.publicSlug)).toBeUndefined();
-    expect(now).toHaveBeenCalledTimes(1);
+    expect(now).toHaveBeenCalledTimes(2);
 
     await module.close();
   });
@@ -160,7 +160,7 @@ describe('DemoDataSeeder', () => {
     seeder.seed();
     seeder.seed();
 
-    expect(now).toHaveBeenCalledTimes(1);
+    expect(now).toHaveBeenCalledTimes(2);
     expect(store.findWaitlistEntryById(1)).toEqual({
       ...originalMorgan,
       status: 'cancelled',
@@ -207,7 +207,7 @@ describe('DemoDataSeeder', () => {
 
     expect(store.findRestaurantById(1)).toBeUndefined();
     expect(store.findWaitlistEntryById(1)).toBeUndefined();
-    expect(now).toHaveBeenCalledTimes(1);
+    expect(now).toHaveBeenCalledTimes(2);
 
     await module.close();
   });
@@ -227,7 +227,7 @@ describe('DemoDataSeeder', () => {
       active: second.store.listActiveWaitlistEntries(1),
       resolved: second.store.listResolvedWaitlistEntries(1),
     }).toEqual(firstSnapshot);
-    expect(second.now).toHaveBeenCalledTimes(1);
+    expect(second.now).toHaveBeenCalledTimes(2);
 
     await first.module.close();
     await second.module.close();

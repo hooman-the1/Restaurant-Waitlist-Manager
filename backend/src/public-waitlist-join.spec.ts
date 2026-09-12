@@ -163,7 +163,7 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     expect(JSON.stringify(response.body)).not.toMatch(
       /action|customer|phone|party|position|restaurant|joined|internal|normalized/i,
     );
-    expect(context.clock.now).toHaveBeenCalledTimes(2);
+    expect(context.clock.now).toHaveBeenCalledTimes(3);
     await context.app.close();
   });
 
@@ -374,7 +374,7 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
 
     expect(context.privateSource.generate).toHaveBeenCalledTimes(3);
     expect(context.actionSource.generate).toHaveBeenCalledTimes(3);
-    expect(context.clock.now).toHaveBeenCalledTimes(1);
+    expect(context.clock.now).toHaveBeenCalledTimes(2);
     expect(context.store.listActiveWaitlistEntries(1)).toEqual(before);
     expectNeutralHeaders(response);
 

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import {
   DashboardController,
@@ -30,8 +31,13 @@ import {
   RestaurantSessionController,
   RestaurantSessionGuard,
 } from './restaurant-session';
+import {
+  CleanupFailureReporter,
+  ResolvedEntryCleanup,
+} from './resolved-entry-cleanup';
 
 @Module({
+  imports: [ScheduleModule.forRoot()],
   controllers: [
     RestaurantSignupController,
     RestaurantVerificationController,
@@ -56,6 +62,8 @@ import {
     PrivateStatusTokenSource,
     ActionReferenceSource,
     DashboardNoStoreGuard,
+    CleanupFailureReporter,
+    ResolvedEntryCleanup,
   ],
   exports: [InMemoryStore, RestaurantSessionGuard],
 })
