@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser = require('cookie-parser');
 
+import { ApiExceptionFilter } from './api-failures';
 import { RuntimeConfiguration } from './runtime-configuration';
 
 export function configureApplication(
@@ -20,10 +21,12 @@ export function configureApplication(
     },
   });
   app.use(cookieParser(configuration.secretKey));
+  app.useGlobalFilters(new ApiExceptionFilter());
   app.useGlobalPipes(
     new ValidationPipe({
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: false },
       whitelist: true,
     }),
   );
