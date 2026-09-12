@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { DashboardController, DashboardNoStoreGuard } from './dashboard';
 import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
 import { PrivateWaitlistStatusController } from './private-waitlist-status';
@@ -34,6 +35,7 @@ import {
     PublicRestaurantLookupController,
     PublicWaitlistJoinController,
     PrivateWaitlistStatusController,
+    DashboardController,
   ],
   providers: [
     InMemoryStore,
@@ -48,6 +50,7 @@ import {
     RestaurantSessionGuard,
     PrivateStatusTokenSource,
     ActionReferenceSource,
+    DashboardNoStoreGuard,
   ],
   exports: [InMemoryStore, RestaurantSessionGuard],
 })

@@ -92,6 +92,26 @@ export type WaitlistCancellationResult =
   | { kind: 'cancelled'; entry: ResolvedWaitlistEntryRecord }
   | { kind: 'not-found' };
 
+export interface DashboardActiveEntry {
+  position: number;
+  customerName: string;
+  phone: string;
+  partySize: number;
+  actionReference: string;
+}
+
+export interface DashboardResolvedEntry {
+  customerName: string;
+  partySize: number;
+  finalStatus: FinalWaitlistStatus;
+}
+
+export interface DashboardSnapshot {
+  restaurantName: string;
+  activeEntries: DashboardActiveEntry[];
+  resolvedToday: DashboardResolvedEntry[];
+}
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -385,6 +405,59 @@ export class InMemoryStore {
     }
 
     return { kind: 'cancelled', entry: cloneWaitlistEntry(cancelled) };
+  }
+
+  readDashboardSnapshot(
+    restaurantId: number,
+    currentTime: Date,
+  ): DashboardSnapshot | undefined {
+    const restaurant = this.restaurants.get(restaurantId);
+    if (restaurant === undefined) {
+      return undefined;
+    }
+
+    const startOfToday = new Date(
+      currentTime.getFullYear(),
+      currentTime.getMonth(),
+      currentTime.getDate(),
+    );
+    const startOfTomorrow = new Date(
+      currentTime.getFullYear(),
+      currentTime.getMonth(),
+      currentTime.getDate() + 1,
+    );
+    const activeEntries: DashboardActiveEntry[] = [];
+    const resolvedToday: DashboardResolvedEntry[] = [];
+
+    for (const entry of this.waitlistEntries.values()) {
+      if (entry.restaurantId !== restaurant.id) {
+        continue;
+      }
+      if (entry.status === 'active') {
+        activeEntries.push({
+          position: activeEntries.length + 1,
+          customerName: entry.customerName,
+          phone: entry.phone,
+          partySize: entry.partySize,
+          actionReference: entry.actionReference,
+        });
+      } else if (
+        entry.resolvedAt >= startOfToday &&
+        entry.resolvedAt < startOfTomorrow
+      ) {
+        resolvedToday.push({
+          customerName: entry.customerName,
+          partySize: entry.partySize,
+          finalStatus: entry.status,
+        });
+      }
+    }
+
+    return {
+      restaurantName: restaurant.name,
+      activeEntries,
+      resolvedToday,
+    };
   }
 
   hasActivePhoneDuplicate(
