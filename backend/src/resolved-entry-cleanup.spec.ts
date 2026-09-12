@@ -218,6 +218,187 @@ describe('ResolvedEntryCleanup', () => {
     expect(() => cleanup.onApplicationBootstrap()).toThrow(failure);
     expect(report).not.toHaveBeenCalled();
   });
+
+  it('serializes duplicate and distinct-date concurrent triggers without double counting', async () => {
+    const store = new InMemoryStore();
+    const yesterday = store.createWaitlistEntry(
+      entryInput('trigger-yesterday', 'seated', new Date(2026, 8, 11), 999),
+    );
+    const todayEntry = store.createWaitlistEntry(
+      entryInput('trigger-today', 'cancelled', new Date(2026, 8, 12, 8), 999),
+    );
+    const now = jest
+      .fn<Date, []>()
+      .mockReturnValueOnce(new Date(2026, 8, 12, 12))
+      .mockReturnValueOnce(new Date(2026, 8, 12, 18))
+      .mockReturnValueOnce(new Date(2026, 8, 13, 1));
+    const cleanup = new ResolvedEntryCleanup(
+      store,
+      { now },
+      { report: jest.fn() },
+    );
+
+    const results = await Promise.all([
+      Promise.resolve().then(() => cleanup.run()),
+      Promise.resolve().then(() => cleanup.run()),
+      Promise.resolve().then(() => cleanup.run()),
+    ]);
+
+    expect(results).toEqual([1, 0, 1]);
+    expect(results.reduce((total, count) => total + count, 0)).toBe(2);
+    expect(now).toHaveBeenCalledTimes(3);
+    expect(store.findWaitlistEntryById(yesterday.id)).toBeUndefined();
+    expect(store.findWaitlistEntryById(todayEntry.id)).toBeUndefined();
+  });
+
+  it('gives private-status and dashboard reads complete pre-cleanup or post-cleanup snapshots while a join serializes', async () => {
+    const store = new InMemoryStore();
+    seedRestaurant(store);
+    const oldResolved = store.createWaitlistEntry(
+      entryInput('snapshot-old', 'seated', new Date(2026, 8, 11)),
+    );
+    store.createWaitlistEntry(entryInput('snapshot-active', 'active', today));
+    const currentResolved = store.createWaitlistEntry(
+      entryInput('snapshot-current', 'no-show', new Date(2026, 8, 12, 8)),
+    );
+    const cleanup = new ResolvedEntryCleanup(
+      store,
+      { now: jest.fn(() => new Date(today)) },
+      { report: jest.fn() },
+    );
+    const joinedAt = new Date(2026, 8, 12, 12, 31);
+
+    const [statusBefore, dashboardBefore, removed, joinResult] =
+      await Promise.all([
+        Promise.resolve().then(() =>
+          store.readPrivateWaitlistStatus(oldResolved.privateStatusToken),
+        ),
+        Promise.resolve().then(() =>
+          store.readDashboardSnapshot(1, new Date(today)),
+        ),
+        Promise.resolve().then(() => cleanup.run()),
+        Promise.resolve().then(() =>
+          store.commitWaitlistJoin('test-restaurant', {
+            customerName: 'Joined During Race',
+            phone: '555-010-9090',
+            normalizedPhone: '5550109090',
+            partySize: 3,
+            privateStatusToken: 'private-racing-join',
+            actionReference: 'action-racing-join',
+            joinedAt,
+          }),
+        ),
+      ]);
+
+    expect(statusBefore).toEqual({
+      kind: 'resolved',
+      restaurantName: 'Test Restaurant',
+      finalStatus: 'seated',
+    });
+    expect(dashboardBefore).toEqual({
+      restaurantName: 'Test Restaurant',
+      activeEntries: [
+        expect.objectContaining({ position: 1, customerName: 'Customer snapshot-active' }),
+      ],
+      resolvedToday: [
+        expect.objectContaining({
+          customerName: currentResolved.customerName,
+          finalStatus: 'no-show',
+        }),
+      ],
+    });
+    expect(removed).toBe(1);
+    expect(joinResult.kind).toBe('created');
+    expect(
+      store.readPrivateWaitlistStatus(oldResolved.privateStatusToken),
+    ).toEqual({ kind: 'not-found' });
+    expect(store.readDashboardSnapshot(1, new Date(today))).toEqual({
+      restaurantName: 'Test Restaurant',
+      activeEntries: [
+        expect.objectContaining({ position: 1, customerName: 'Customer snapshot-active' }),
+        expect.objectContaining({ position: 2, customerName: 'Joined During Race' }),
+      ],
+      resolvedToday: dashboardBefore?.resolvedToday,
+    });
+  });
+
+  it('classifies customer cancellation and staff resolution committed before cleanup, while retaining transitions committed after it', async () => {
+    const store = new InMemoryStore();
+    seedRestaurant(store);
+    const cancelBefore = store.createWaitlistEntry(
+      entryInput('cancel-before', 'active', today),
+    );
+    const resolveBefore = store.createWaitlistEntry(
+      entryInput('resolve-before', 'active', today),
+    );
+    const cancelAfter = store.createWaitlistEntry(
+      entryInput('cancel-after', 'active', today),
+    );
+    const resolveAfter = store.createWaitlistEntry(
+      entryInput('resolve-after', 'active', today),
+    );
+    const oldResolutionTime = new Date(2026, 8, 11, 23);
+    const cleanup = new ResolvedEntryCleanup(
+      store,
+      { now: jest.fn(() => new Date(today)) },
+      { report: jest.fn() },
+    );
+
+    const results = await Promise.all([
+      Promise.resolve().then(() =>
+        store.cancelWaitlistEntry(cancelBefore.privateStatusToken, () =>
+          new Date(oldResolutionTime),
+        ),
+      ),
+      Promise.resolve().then(() =>
+        store.resolveWaitlistEntryByActionReference(
+          1,
+          resolveBefore.actionReference,
+          'seated',
+          () => new Date(oldResolutionTime),
+        ),
+      ),
+      Promise.resolve().then(() => cleanup.run()),
+      Promise.resolve().then(() =>
+        store.cancelWaitlistEntry(cancelAfter.privateStatusToken, () =>
+          new Date(oldResolutionTime),
+        ),
+      ),
+      Promise.resolve().then(() =>
+        store.resolveWaitlistEntryByActionReference(
+          1,
+          resolveAfter.actionReference,
+          'no-show',
+          () => new Date(oldResolutionTime),
+        ),
+      ),
+    ]);
+
+    expect(results).toEqual([
+      expect.objectContaining({ kind: 'cancelled' }),
+      expect.objectContaining({ kind: 'resolved' }),
+      2,
+      expect.objectContaining({ kind: 'cancelled' }),
+      expect.objectContaining({ kind: 'resolved' }),
+    ]);
+    expect(store.readPrivateWaitlistStatus(cancelBefore.privateStatusToken)).toEqual({
+      kind: 'not-found',
+    });
+    expect(store.readPrivateWaitlistStatus(resolveBefore.privateStatusToken)).toEqual({
+      kind: 'not-found',
+    });
+    expect(store.readPrivateWaitlistStatus(cancelAfter.privateStatusToken)).toEqual({
+      kind: 'resolved',
+      restaurantName: 'Test Restaurant',
+      finalStatus: 'cancelled',
+    });
+    expect(store.readPrivateWaitlistStatus(resolveAfter.privateStatusToken)).toEqual({
+      kind: 'resolved',
+      restaurantName: 'Test Restaurant',
+      finalStatus: 'no-show',
+    });
+    expect(cleanup.run()).toBe(2);
+  });
 });
 
 describe('resolved-entry cleanup lifecycle', () => {
