@@ -20,6 +20,7 @@ const privateOne = '10000000-0000-4000-8000-000000000001';
 const actionOne = '20000000-0000-4000-8000-000000000002';
 const privateTwo = '30000000-0000-4000-8000-000000000003';
 const actionTwo = '40000000-0000-4000-8000-000000000004';
+const joinDataUuid = '50000000-0000-4000-8000-000000000005';
 const duplicateBody = {
   kind: 'duplicate-phone',
   message: 'This phone number is already on the waitlist.',
@@ -404,6 +405,118 @@ describe('POST /api/restaurants/:restaurantSlug/waitlist-entries', () => {
     await context.app.close();
   });
 
+  it.each([
+    ['restaurant slug', 'private'],
+    ['restaurant slug', 'action'],
+    ['customer name', 'private'],
+    ['customer name', 'action'],
+    ['display phone', 'private'],
+    ['display phone', 'action'],
+  ] as const)(
+    'retries a fresh pair when the %s equals the generated %s capability',
+    async (dataField, capability) => {
+      const privateValues =
+        capability === 'private'
+          ? [joinDataUuid, privateTwo]
+          : [privateOne, privateTwo];
+      const actionValues =
+        capability === 'action'
+          ? [joinDataUuid, actionTwo]
+          : [actionOne, actionTwo];
+      const context = await createTestContext({
+        privateToken: () => privateValues.shift() ?? privateTwo,
+        actionReference: () => actionValues.shift() ?? actionTwo,
+      });
+      const restaurant =
+        dataField === 'restaurant slug'
+          ? context.store.createRestaurant({
+              name: 'UUID Slug Restaurant',
+              normalizedName: 'uuid slug restaurant',
+              email: 'uuid-slug@example.com',
+              normalizedEmail: 'uuid-slug@example.com',
+              passwordHash: 'hash-uuid-slug',
+              slug: joinDataUuid,
+              verified: true,
+              createdAt: fixedNow,
+            })
+          : context.store.findRestaurantBySlug('demo-restaurant');
+      const body = {
+        ...validJoin,
+        customerName:
+          dataField === 'customer name' ? joinDataUuid : validJoin.customerName,
+        phone: dataField === 'display phone' ? joinDataUuid : validJoin.phone,
+      };
+
+      await request(context.app.getHttpServer())
+        .post(`/api/restaurants/${restaurant?.slug}/waitlist-entries`)
+        .send(body)
+        .expect(201, { kind: 'success', privateStatusToken: privateTwo });
+
+      expect(context.privateSource.generate).toHaveBeenCalledTimes(2);
+      expect(context.actionSource.generate).toHaveBeenCalledTimes(2);
+      expect(
+        context.store.findWaitlistEntryByPrivateStatusToken(privateTwo),
+      ).toMatchObject({
+        customerName: body.customerName,
+        phone: body.phone,
+        actionReference: actionTwo,
+      });
+      await context.app.close();
+    },
+  );
+
+  it.each(['restaurant slug', 'customer name', 'display phone'] as const)(
+    'exhausts repeated %s collisions without mutation or sequence consumption',
+    async (dataField) => {
+      const context = await createTestContext({
+        privateToken: () => joinDataUuid,
+        actionReference: () => actionOne,
+      });
+      const restaurant =
+        dataField === 'restaurant slug'
+          ? context.store.createRestaurant({
+              name: 'UUID Slug Restaurant',
+              normalizedName: 'uuid slug restaurant',
+              email: 'uuid-slug@example.com',
+              normalizedEmail: 'uuid-slug@example.com',
+              passwordHash: 'hash-uuid-slug',
+              slug: joinDataUuid,
+              verified: true,
+              createdAt: fixedNow,
+            })
+          : context.store.findRestaurantBySlug('demo-restaurant');
+      const body = {
+        ...validJoin,
+        customerName:
+          dataField === 'customer name' ? joinDataUuid : validJoin.customerName,
+        phone: dataField === 'display phone' ? joinDataUuid : validJoin.phone,
+      };
+      const before = context.store.listActiveWaitlistEntries(restaurant?.id ?? 0);
+
+      await request(context.app.getHttpServer())
+        .post(`/api/restaurants/${restaurant?.slug}/waitlist-entries`)
+        .send(body)
+        .expect(500, unexpectedBody);
+
+      expect(context.privateSource.generate).toHaveBeenCalledTimes(3);
+      expect(context.actionSource.generate).toHaveBeenCalledTimes(3);
+      expect(context.store.listActiveWaitlistEntries(restaurant?.id ?? 0)).toEqual(
+        before,
+      );
+
+      context.privateSource.generate.mockImplementation(() => privateTwo);
+      context.actionSource.generate.mockImplementation(() => actionTwo);
+      await request(context.app.getHttpServer())
+        .post(`/api/restaurants/${restaurant?.slug}/waitlist-entries`)
+        .send(body)
+        .expect(201);
+      expect(
+        context.store.findWaitlistEntryByPrivateStatusToken(privateTwo)?.id,
+      ).toBe(4);
+      await context.app.close();
+    },
+  );
+
   it('retries a fresh pair when the atomic final capability recheck collides', async () => {
     const privateValues = [privateOne, privateTwo];
     const actionValues = [actionOne, actionTwo];
@@ -610,4 +723,52 @@ describe('atomic waitlist join store operation', () => {
       entry: { id: 1 },
     });
   });
+
+  it.each([
+    ['restaurant slug', 'private'],
+    ['restaurant slug', 'action'],
+    ['customer name', 'private'],
+    ['customer name', 'action'],
+    ['display phone', 'private'],
+    ['display phone', 'action'],
+  ] as const)(
+    'atomically rejects a %s collision from the %s capability',
+    (dataField, capability) => {
+      const store = new InMemoryStore();
+      const restaurant = store.createRestaurant({
+        name: 'Atomic Restaurant',
+        normalizedName: 'atomic restaurant',
+        email: 'atomic@example.com',
+        normalizedEmail: 'atomic@example.com',
+        passwordHash: 'hash-atomic',
+        slug: dataField === 'restaurant slug' ? joinDataUuid : 'atomic',
+        verified: true,
+        createdAt: fixedNow,
+      });
+      const input = {
+        customerName:
+          dataField === 'customer name' ? joinDataUuid : 'Customer',
+        phone: dataField === 'display phone' ? joinDataUuid : '123',
+        normalizedPhone:
+          dataField === 'display phone' ? '50000000000040008000000000000005' : '123',
+        partySize: 1,
+        privateStatusToken:
+          capability === 'private' ? joinDataUuid : privateOne,
+        actionReference: capability === 'action' ? joinDataUuid : actionOne,
+        joinedAt: fixedNow,
+      };
+
+      expect(store.commitWaitlistJoin(restaurant.slug, input)).toEqual({
+        kind: 'capability-collision',
+      });
+      expect(store.listActiveWaitlistEntries(restaurant.id)).toEqual([]);
+      expect(
+        store.commitWaitlistJoin(restaurant.slug, {
+          ...input,
+          privateStatusToken: privateOne,
+          actionReference: actionOne,
+        }),
+      ).toMatchObject({ kind: 'created', entry: { id: 1 } });
+    },
+  );
 });

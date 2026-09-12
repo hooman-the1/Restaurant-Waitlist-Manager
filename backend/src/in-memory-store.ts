@@ -341,6 +341,7 @@ export class InMemoryStore {
     }
     if (
       input.privateStatusToken === input.actionReference ||
+      this.hasJoinDataCapabilityCollision(restaurant, input) ||
       this.hasWaitlistCapabilityCollision(
         input.privateStatusToken,
         input.actionReference,
@@ -364,6 +365,24 @@ export class InMemoryStore {
     this.nextWaitlistEntryId += 1;
 
     return { kind: 'created', entry: cloneWaitlistEntry(entry) };
+  }
+
+  private hasJoinDataCapabilityCollision(
+    restaurant: RestaurantRecord,
+    input: WaitlistJoinInput,
+  ): boolean {
+    const protectedValues = [
+      restaurant.slug,
+      String(restaurant.id),
+      input.customerName,
+      input.phone,
+      input.normalizedPhone,
+      String(input.partySize),
+      String(this.nextWaitlistEntryId),
+    ];
+    return [input.privateStatusToken, input.actionReference].some((capability) =>
+      protectedValues.includes(capability),
+    );
   }
 
   listActiveWaitlistEntries(restaurantId: number): ActiveWaitlistEntryRecord[] {
