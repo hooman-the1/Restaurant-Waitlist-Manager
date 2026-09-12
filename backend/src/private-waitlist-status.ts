@@ -8,7 +8,9 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiTags } from '@nestjs/swagger';
 
+import { ApiContractOperation } from './api-documentation';
 import { notFoundFailure } from './api-failures';
 import { SystemClock } from './demo-data-seeder';
 import {
@@ -22,6 +24,7 @@ type PrivateWaitlistStatusView = Exclude<
 >;
 
 @Controller('api/waitlist-entries')
+@ApiTags('Private status')
 export class PrivateWaitlistStatusController {
   constructor(
     private readonly store: InMemoryStore,
@@ -29,6 +32,7 @@ export class PrivateWaitlistStatusController {
   ) {}
 
   @Get(':privateToken')
+  @ApiContractOperation('/api/waitlist-entries/{privateToken}', 'get')
   lookup(
     @Param('privateToken') privateToken: string,
     @Res({ passthrough: true }) response: Response,
@@ -44,6 +48,10 @@ export class PrivateWaitlistStatusController {
 
   @Post(':privateToken/cancellations')
   @HttpCode(HttpStatus.OK)
+  @ApiContractOperation(
+    '/api/waitlist-entries/{privateToken}/cancellations',
+    'post',
+  )
   cancel(
     @Param('privateToken') privateToken: string,
   ): { kind: 'cancelled' } {

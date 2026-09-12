@@ -6,6 +6,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ApiTags } from '@nestjs/swagger';
 import { argon2id, hash as argon2Hash } from 'argon2';
 
 import {
@@ -13,6 +14,7 @@ import {
   unexpectedFailure,
   validationFailure,
 } from './api-failures';
+import { ApiContractOperation } from './api-documentation';
 import { SystemClock } from './demo-data-seeder';
 import {
   generateRestaurantSlug,
@@ -59,6 +61,7 @@ export class VerificationUrlLogger {
 }
 
 @Controller('api/restaurants')
+@ApiTags('Restaurant accounts')
 export class RestaurantSignupController {
   constructor(
     private readonly store: InMemoryStore,
@@ -70,6 +73,7 @@ export class RestaurantSignupController {
   ) {}
 
   @Post()
+  @ApiContractOperation('/api/restaurants', 'post')
   async signup(@Body() input: RestaurantSignupDto): Promise<{ kind: 'success' }> {
     const name = normalizeRestaurantDisplayName(input.restaurantName);
     if (name.length === 0) {

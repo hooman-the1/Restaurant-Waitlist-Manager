@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import cookieParser = require('cookie-parser');
 
+import { configureApiDocumentation } from './api-documentation';
 import { ApiExceptionFilter } from './api-failures';
 import { RuntimeConfiguration } from './runtime-configuration';
 
@@ -8,6 +9,7 @@ export function configureApplication(
   app: INestApplication,
   configuration: RuntimeConfiguration,
 ): void {
+  configureApiDocumentation(app);
   app.enableCors({
     credentials: true,
     origin: (

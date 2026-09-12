@@ -10,7 +10,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiTags } from '@nestjs/swagger';
 
+import { ApiContractOperation } from './api-documentation';
 import { notFoundFailure, unexpectedFailure } from './api-failures';
 import { SystemClock } from './demo-data-seeder';
 import { DashboardSnapshot, InMemoryStore } from './in-memory-store';
@@ -34,6 +36,7 @@ export class DashboardNoStoreGuard implements CanActivate {
 
 @Controller('api/dashboard')
 @UseGuards(DashboardNoStoreGuard, RestaurantSessionGuard)
+@ApiTags('Restaurant dashboard')
 export class DashboardController {
   constructor(
     private readonly store: InMemoryStore,
@@ -41,6 +44,7 @@ export class DashboardController {
   ) {}
 
   @Get()
+  @ApiContractOperation('/api/dashboard', 'get')
   load(
     @CurrentRestaurant() principal: RestaurantPrincipal,
   ): { kind: 'success'; dashboard: DashboardSnapshot } {
@@ -58,6 +62,7 @@ export class DashboardController {
 
 @Controller('api/dashboard/waitlist-entries')
 @UseGuards(RestaurantSessionGuard)
+@ApiTags('Restaurant dashboard')
 export class StaffWaitlistResolutionController {
   constructor(
     private readonly store: InMemoryStore,
@@ -65,6 +70,10 @@ export class StaffWaitlistResolutionController {
   ) {}
 
   @Patch(':actionReference')
+  @ApiContractOperation(
+    '/api/dashboard/waitlist-entries/{actionReference}',
+    'patch',
+  )
   resolve(
     @CurrentRestaurant() principal: RestaurantPrincipal,
     @Param('actionReference') actionReference: string,

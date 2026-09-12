@@ -1,5 +1,7 @@
 import { Body, Controller, Injectable, Param, Post } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 
+import { ApiContractOperation } from './api-documentation';
 import {
   duplicatePhoneFailure,
   notFoundFailure,
@@ -34,6 +36,7 @@ export class ActionReferenceSource {
 }
 
 @Controller('api/restaurants/:restaurantSlug/waitlist-entries')
+@ApiTags('Public waitlist')
 export class PublicWaitlistJoinController {
   constructor(
     private readonly store: InMemoryStore,
@@ -43,6 +46,10 @@ export class PublicWaitlistJoinController {
   ) {}
 
   @Post()
+  @ApiContractOperation(
+    '/api/restaurants/{restaurantSlug}/waitlist-entries',
+    'post',
+  )
   join(
     @Param('restaurantSlug') restaurantSlug: string,
     @Body() input: JoinWaitlistDto,

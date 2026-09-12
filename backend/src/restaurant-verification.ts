@@ -14,11 +14,13 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ApiTags } from '@nestjs/swagger';
 import { sign } from 'cookie-signature';
 import { Response } from 'express';
 import { Observable, catchError, throwError } from 'rxjs';
 
 import { invalidOrUsedTokenFailure } from './api-failures';
+import { ApiContractOperation } from './api-documentation';
 import { InMemoryStore } from './in-memory-store';
 import { RestaurantVerificationDto } from './request-dtos';
 
@@ -58,6 +60,7 @@ export class VerificationDtoFailureInterceptor implements NestInterceptor {
 
 @Controller('api/restaurant-verifications')
 @UseInterceptors(VerificationDtoFailureInterceptor)
+@ApiTags('Restaurant accounts')
 export class RestaurantVerificationController {
   constructor(
     private readonly store: InMemoryStore,
@@ -66,6 +69,7 @@ export class RestaurantVerificationController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
+  @ApiContractOperation('/api/restaurant-verifications', 'post')
   verify(
     @Body() input: RestaurantVerificationDto,
     @Res({ passthrough: true }) response: Response,

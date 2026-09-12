@@ -8,7 +8,9 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Request } from 'express';
+import { ApiTags } from '@nestjs/swagger';
 
+import { ApiContractOperation } from './api-documentation';
 import { unauthorizedFailure } from './api-failures';
 import { InMemoryStore } from './in-memory-store';
 
@@ -98,8 +100,10 @@ export class RestaurantSessionGuard implements CanActivate {
 
 @Controller('api/restaurant-session')
 @UseGuards(RestaurantSessionGuard)
+@ApiTags('Restaurant accounts')
 export class RestaurantSessionController {
   @Get()
+  @ApiContractOperation('/api/restaurant-session', 'get')
   session(
     @CurrentRestaurant() _principal: RestaurantPrincipal,
   ): { kind: 'allowed' } {

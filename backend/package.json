@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "nest build",
+    "openapi:check": "npm run build && node dist/openapi-check.js",
     "start": "nest start",
     "test": "jest --runInBand"
   },
@@ -13,13 +14,18 @@
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/schedule": "^5.0.1",
+    "@nestjs/swagger": "^11.4.7",
+    "@scalar/api-reference": "^1.25.70",
+    "@scalar/nestjs-api-reference": "^0.4.16",
     "argon2": "^0.44.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
     "cookie-signature": "^1.2.2",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.1"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
