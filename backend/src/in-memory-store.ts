@@ -79,6 +79,15 @@ export type WaitlistJoinCommitResult =
   | { kind: 'duplicate-phone' }
   | { kind: 'capability-collision' };
 
+export type PrivateWaitlistStatusReadResult =
+  | { kind: 'active'; restaurantName: string; position: number }
+  | {
+      kind: 'resolved';
+      restaurantName: string;
+      finalStatus: FinalWaitlistStatus;
+    }
+  | { kind: 'not-found' };
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -300,6 +309,48 @@ export class InMemoryStore {
         (entry) => entry.actionReference === reference,
       ),
     );
+  }
+
+  readPrivateWaitlistStatus(
+    token: string,
+  ): PrivateWaitlistStatusReadResult {
+    const entry = [...this.waitlistEntries.values()].find(
+      (candidate) => candidate.privateStatusToken === token,
+    );
+    if (entry === undefined) {
+      return { kind: 'not-found' };
+    }
+
+    const restaurant = this.restaurants.get(entry.restaurantId);
+    if (restaurant === undefined) {
+      return { kind: 'not-found' };
+    }
+    if (entry.status !== 'active') {
+      return {
+        kind: 'resolved',
+        restaurantName: restaurant.name,
+        finalStatus: entry.status,
+      };
+    }
+
+    let position = 0;
+    for (const candidate of this.waitlistEntries.values()) {
+      if (
+        candidate.restaurantId === restaurant.id &&
+        candidate.status === 'active'
+      ) {
+        position += 1;
+        if (candidate.id === entry.id) {
+          return {
+            kind: 'active',
+            restaurantName: restaurant.name,
+            position,
+          };
+        }
+      }
+    }
+
+    return { kind: 'not-found' };
   }
 
   hasActivePhoneDuplicate(

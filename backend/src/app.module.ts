@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
+import { PrivateWaitlistStatusController } from './private-waitlist-status';
 import { PublicRestaurantLookupController } from './public-restaurant-lookup';
 import {
   ActionReferenceSource,
@@ -32,6 +33,7 @@ import {
     RestaurantSessionController,
     PublicRestaurantLookupController,
     PublicWaitlistJoinController,
+    PrivateWaitlistStatusController,
   ],
   providers: [
     InMemoryStore,
