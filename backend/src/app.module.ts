@@ -1,4 +1,9 @@
 import { Module } from '@nestjs/common';
 
-@Module({})
+import { InMemoryStore } from './in-memory-store';
+
+@Module({
+  providers: [InMemoryStore],
+  exports: [InMemoryStore],
+})
 export class AppModule {}
