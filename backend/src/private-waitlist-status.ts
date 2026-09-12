@@ -1,7 +1,16 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  Res,
+} from '@nestjs/common';
 import { Response } from 'express';
 
 import { notFoundFailure } from './api-failures';
+import { SystemClock } from './demo-data-seeder';
 import {
   InMemoryStore,
   PrivateWaitlistStatusReadResult,
@@ -14,7 +23,10 @@ type PrivateWaitlistStatusView = Exclude<
 
 @Controller('api/waitlist-entries')
 export class PrivateWaitlistStatusController {
-  constructor(private readonly store: InMemoryStore) {}
+  constructor(
+    private readonly store: InMemoryStore,
+    private readonly clock: SystemClock,
+  ) {}
 
   @Get(':privateToken')
   lookup(
@@ -28,5 +40,20 @@ export class PrivateWaitlistStatusController {
     }
 
     return result;
+  }
+
+  @Post(':privateToken/cancellations')
+  @HttpCode(HttpStatus.OK)
+  cancel(
+    @Param('privateToken') privateToken: string,
+  ): { kind: 'cancelled' } {
+    const result = this.store.cancelWaitlistEntry(privateToken, () =>
+      this.clock.now(),
+    );
+    if (result.kind === 'not-found') {
+      throw notFoundFailure();
+    }
+
+    return { kind: 'cancelled' };
   }
 }

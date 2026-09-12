@@ -88,6 +88,10 @@ export type PrivateWaitlistStatusReadResult =
     }
   | { kind: 'not-found' };
 
+export type WaitlistCancellationResult =
+  | { kind: 'cancelled'; entry: ResolvedWaitlistEntryRecord }
+  | { kind: 'not-found' };
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -351,6 +355,36 @@ export class InMemoryStore {
     }
 
     return { kind: 'not-found' };
+  }
+
+  cancelWaitlistEntry(
+    token: string,
+    readResolutionTime: () => Date,
+  ): WaitlistCancellationResult {
+    const entry = [...this.waitlistEntries.values()].find(
+      (candidate) => candidate.privateStatusToken === token,
+    );
+    if (
+      entry === undefined ||
+      entry.status !== 'active' ||
+      !this.restaurants.has(entry.restaurantId)
+    ) {
+      return { kind: 'not-found' };
+    }
+
+    const cancelled = cloneWaitlistEntry({
+      ...entry,
+      status: 'cancelled' as const,
+      resolvedAt: readResolutionTime(),
+    });
+    try {
+      this.waitlistEntries.set(entry.id, cancelled);
+    } catch (error: unknown) {
+      this.waitlistEntries.set(entry.id, entry);
+      throw error;
+    }
+
+    return { kind: 'cancelled', entry: cloneWaitlistEntry(cancelled) };
   }
 
   hasActivePhoneDuplicate(
