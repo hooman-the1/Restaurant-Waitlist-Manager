@@ -14,11 +14,16 @@ import {
   RestaurantVerificationController,
   VerificationDtoFailureInterceptor,
 } from './restaurant-verification';
+import {
+  RestaurantSessionController,
+  RestaurantSessionGuard,
+} from './restaurant-session';
 
 @Module({
   controllers: [
     RestaurantSignupController,
     RestaurantVerificationController,
+    RestaurantSessionController,
   ],
   providers: [
     InMemoryStore,
@@ -30,7 +35,8 @@ import {
     VerificationUrlLogger,
     RestaurantSessionSigner,
     VerificationDtoFailureInterceptor,
+    RestaurantSessionGuard,
   ],
-  exports: [InMemoryStore],
+  exports: [InMemoryStore, RestaurantSessionGuard],
 })
 export class AppModule {}
