@@ -52,7 +52,7 @@ The corresponding Angular-shaped demo paths are:
 - `http://localhost:4200/status/7a2bfe87-27d4-4e13-8b0d-e7804c1e7421`
 - `http://localhost:4200/status/c2a7198e-6d40-4b53-9f81-37e5a6c04bd2`
 
-The current `front/` application is mock-backed. These Angular paths are convenient shapes only; they are not evidence that the frontend sends HTTP requests to this API.
+The production `front/` application calls this API at `http://localhost:8000`. Reloading an Angular page preserves the backend's in-memory state and the browser's signed session cookie; restarting the backend resets runtime state.
 
 ## Local restaurant sessions
 

@@ -1,7 +1,6 @@
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { defer, firstValueFrom, Observable, of, throwError } from 'rxjs';
 
-import { appConfig } from './app.config';
 import {
   ActiveEntryActionReference,
   DashboardAccessResult,
@@ -10,6 +9,7 @@ import {
   UNEXPECTED_ERROR_MESSAGE
 } from './api-contracts';
 import {
+  createDefaultMockApplication,
   createMockApplicationForTesting,
   MockRestaurantDashboardService
 } from './mock-restaurant-dashboard.service';
@@ -74,7 +74,12 @@ describe('MockRestaurantDashboardService', () => {
   }));
 
   it('registers one dashboard mock and shares the default composition through DI', async () => {
-    TestBed.configureTestingModule({ providers: appConfig.providers });
+    const concrete = createDefaultMockApplication();
+    TestBed.configureTestingModule({ providers: [
+      { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: concrete.accountService },
+      { provide: CUSTOMER_WAITLIST_SERVICE, useValue: concrete.customerWaitlistService },
+      { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: concrete.dashboardService }
+    ] });
 
     const account = TestBed.inject(RESTAURANT_ACCOUNT_SERVICE);
     const customer = TestBed.inject(CUSTOMER_WAITLIST_SERVICE);

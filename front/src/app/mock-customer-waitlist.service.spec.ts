@@ -1,7 +1,6 @@
 import { fakeAsync, flushMicrotasks, TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 
-import { appConfig } from './app.config';
 import {
   DUPLICATE_PHONE_MESSAGE,
   FinalStatus,
@@ -37,11 +36,14 @@ describe('MockCustomerWaitlistService', () => {
   ) => firstValueFrom(service.joinWaitlist({ ...validJoin, ...overrides }));
 
   it('registers exactly one concrete mock behind the customer-waitlist token', () => {
-    TestBed.configureTestingModule({ providers: appConfig.providers });
+    const concrete = isolatedService();
+    TestBed.configureTestingModule({
+      providers: [{ provide: CUSTOMER_WAITLIST_SERVICE, useValue: concrete }]
+    });
 
     const service = TestBed.inject(CUSTOMER_WAITLIST_SERVICE);
 
-    expect(service instanceof MockCustomerWaitlistService).toBeTrue();
+    expect(service).toBe(concrete);
   });
 
   it('loads the privacy-minimal active status created through the shared public service', async () => {

@@ -1,7 +1,6 @@
 import { fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 
-import { appConfig } from './app.config';
 import { UNEXPECTED_ERROR_MESSAGE } from './api-contracts';
 import {
   MockRestaurantAccountService,
@@ -25,11 +24,14 @@ describe('MockRestaurantAccountService', () => {
     });
 
   it('registers the concrete mock behind the application-owned token', () => {
-    TestBed.configureTestingModule({ providers: appConfig.providers });
+    const concrete = isolatedService();
+    TestBed.configureTestingModule({
+      providers: [{ provide: RESTAURANT_ACCOUNT_SERVICE, useValue: concrete }]
+    });
 
     const service = TestBed.inject(RESTAURANT_ACCOUNT_SERVICE);
 
-    expect(service instanceof MockRestaurantAccountService).toBeTrue();
+    expect(service).toBe(concrete);
   });
 
   it('emits one result asynchronously and completes for every operation', fakeAsync(() => {

@@ -1,10 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { NavigationEnd, Router } from '@angular/router';
+import { NavigationEnd, provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { filter, firstValueFrom, take } from 'rxjs';
 
-import { appConfig } from './app.config';
+import { routes } from './app.routes';
 import { ActiveEntryActionReference } from './api-contracts';
+import { createDefaultMockApplication } from './mock-restaurant-dashboard.service';
 import { PublicWaitlistJoinComponent } from './public-waitlist-join.component';
 import {
   CUSTOMER_WAITLIST_SERVICE,
@@ -20,8 +21,18 @@ describe('default mock application demo', () => {
 
   let harness: RouterTestingHarness;
 
+  const mockProviders = () => {
+    const composition = createDefaultMockApplication();
+    return [
+      provideRouter(routes),
+      { provide: RESTAURANT_ACCOUNT_SERVICE, useValue: composition.accountService },
+      { provide: CUSTOMER_WAITLIST_SERVICE, useValue: composition.customerWaitlistService },
+      { provide: RESTAURANT_DASHBOARD_SERVICE, useValue: composition.dashboardService }
+    ];
+  };
+
   beforeEach(async () => {
-    TestBed.configureTestingModule({ providers: appConfig.providers });
+    TestBed.configureTestingModule({ providers: mockProviders() });
     harness = await RouterTestingHarness.create();
   });
 
@@ -145,7 +156,7 @@ describe('default mock application demo', () => {
     }));
 
     TestBed.resetTestingModule();
-    TestBed.configureTestingModule({ providers: appConfig.providers });
+    TestBed.configureTestingModule({ providers: mockProviders() });
     const freshCustomer = TestBed.inject(CUSTOMER_WAITLIST_SERVICE);
     const freshDashboard = TestBed.inject(RESTAURANT_DASHBOARD_SERVICE);
 
