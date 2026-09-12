@@ -15,6 +15,17 @@ export interface RestaurantRecord {
 export type CreateRestaurantInput = Omit<RestaurantRecord, 'id'>;
 export type UpdateRestaurantInput = Partial<CreateRestaurantInput>;
 
+export interface RestaurantUniquenessKeys {
+  normalizedName: string;
+  normalizedEmail: string;
+  slug: string;
+}
+
+export type RestaurantSignupCommitResult =
+  | { kind: 'created'; restaurant: RestaurantRecord }
+  | { kind: 'conflict' }
+  | { kind: 'token-collision' };
+
 export interface VerificationTokenRecord {
   token: string;
   restaurantId: number;
@@ -119,6 +130,63 @@ export class InMemoryStore {
         (restaurant) => restaurant.slug === slug,
       ),
     );
+  }
+
+  hasRestaurantConflict(keys: RestaurantUniquenessKeys): boolean {
+    return (
+      this.findRestaurantByNormalizedName(keys.normalizedName) !== undefined ||
+      this.findRestaurantByNormalizedEmail(keys.normalizedEmail) !== undefined ||
+      this.findRestaurantBySlug(keys.slug) !== undefined
+    );
+  }
+
+  commitRestaurantSignup(
+    input: CreateRestaurantInput,
+    verificationToken: string,
+  ): RestaurantSignupCommitResult {
+    if (this.hasRestaurantConflict(input)) {
+      return { kind: 'conflict' };
+    }
+    if (this.verificationTokens.has(verificationToken)) {
+      return { kind: 'token-collision' };
+    }
+
+    const restaurant = cloneRestaurant({
+      ...input,
+      id: this.nextRestaurantId,
+    });
+    this.restaurants.set(restaurant.id, restaurant);
+    try {
+      this.verificationTokens.set(verificationToken, {
+        token: verificationToken,
+        restaurantId: restaurant.id,
+      });
+    } catch (error: unknown) {
+      this.restaurants.delete(restaurant.id);
+      throw error;
+    }
+    this.nextRestaurantId += 1;
+
+    return { kind: 'created', restaurant: cloneRestaurant(restaurant) };
+  }
+
+  rollbackRestaurantSignup(
+    restaurantId: number,
+    verificationToken: string,
+  ): boolean {
+    const token = this.verificationTokens.get(verificationToken);
+    if (
+      token?.restaurantId !== restaurantId ||
+      restaurantId !== this.nextRestaurantId - 1
+    ) {
+      return false;
+    }
+
+    this.verificationTokens.delete(verificationToken);
+    this.restaurants.delete(restaurantId);
+    this.nextRestaurantId = restaurantId;
+
+    return true;
   }
 
   createVerificationToken(
