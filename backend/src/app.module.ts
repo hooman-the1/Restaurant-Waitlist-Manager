@@ -4,6 +4,11 @@ import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
 import { PublicRestaurantLookupController } from './public-restaurant-lookup';
 import {
+  ActionReferenceSource,
+  PrivateStatusTokenSource,
+  PublicWaitlistJoinController,
+} from './public-waitlist-join';
+import {
   FrontendOrigin,
   PasswordHasher,
   RestaurantSignupController,
@@ -26,6 +31,7 @@ import {
     RestaurantVerificationController,
     RestaurantSessionController,
     PublicRestaurantLookupController,
+    PublicWaitlistJoinController,
   ],
   providers: [
     InMemoryStore,
@@ -38,6 +44,8 @@ import {
     RestaurantSessionSigner,
     VerificationDtoFailureInterceptor,
     RestaurantSessionGuard,
+    PrivateStatusTokenSource,
+    ActionReferenceSource,
   ],
   exports: [InMemoryStore, RestaurantSessionGuard],
 })

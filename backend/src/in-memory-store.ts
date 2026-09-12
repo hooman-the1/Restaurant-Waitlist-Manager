@@ -68,6 +68,17 @@ export type CreateWaitlistEntryInput =
   | Omit<ActiveWaitlistEntryRecord, 'id'>
   | Omit<ResolvedWaitlistEntryRecord, 'id'>;
 
+export type WaitlistJoinInput = Omit<
+  ActiveWaitlistEntryRecord,
+  'id' | 'restaurantId' | 'status'
+>;
+
+export type WaitlistJoinCommitResult =
+  | { kind: 'created'; entry: ActiveWaitlistEntryRecord }
+  | { kind: 'not-found' }
+  | { kind: 'duplicate-phone' }
+  | { kind: 'capability-collision' };
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -289,6 +300,70 @@ export class InMemoryStore {
         (entry) => entry.actionReference === reference,
       ),
     );
+  }
+
+  hasActivePhoneDuplicate(
+    restaurantId: number,
+    normalizedPhone: string,
+  ): boolean {
+    return [...this.waitlistEntries.values()].some(
+      (entry) =>
+        entry.restaurantId === restaurantId &&
+        entry.status === 'active' &&
+        entry.normalizedPhone === normalizedPhone,
+    );
+  }
+
+  hasWaitlistCapabilityCollision(...capabilities: string[]): boolean {
+    return [...this.waitlistEntries.values()].some((entry) =>
+      capabilities.some(
+        (capability) =>
+          capability === entry.privateStatusToken ||
+          capability === entry.actionReference,
+      ),
+    );
+  }
+
+  commitWaitlistJoin(
+    restaurantSlug: string,
+    input: WaitlistJoinInput,
+  ): WaitlistJoinCommitResult {
+    const restaurant = [...this.restaurants.values()].find(
+      (candidate) => candidate.slug === restaurantSlug,
+    );
+    if (restaurant === undefined) {
+      return { kind: 'not-found' };
+    }
+    if (
+      this.hasActivePhoneDuplicate(restaurant.id, input.normalizedPhone)
+    ) {
+      return { kind: 'duplicate-phone' };
+    }
+    if (
+      input.privateStatusToken === input.actionReference ||
+      this.hasWaitlistCapabilityCollision(
+        input.privateStatusToken,
+        input.actionReference,
+      )
+    ) {
+      return { kind: 'capability-collision' };
+    }
+
+    const entry = cloneWaitlistEntry({
+      ...input,
+      id: this.nextWaitlistEntryId,
+      restaurantId: restaurant.id,
+      status: 'active' as const,
+    });
+    try {
+      this.waitlistEntries.set(entry.id, entry);
+    } catch (error: unknown) {
+      this.waitlistEntries.delete(entry.id);
+      throw error;
+    }
+    this.nextWaitlistEntryId += 1;
+
+    return { kind: 'created', entry: cloneWaitlistEntry(entry) };
   }
 
   listActiveWaitlistEntries(restaurantId: number): ActiveWaitlistEntryRecord[] {
