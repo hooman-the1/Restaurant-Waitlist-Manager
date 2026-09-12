@@ -9,9 +9,17 @@ import {
   VerificationTokenSource,
   VerificationUrlLogger,
 } from './restaurant-signup';
+import {
+  RestaurantSessionSigner,
+  RestaurantVerificationController,
+  VerificationDtoFailureInterceptor,
+} from './restaurant-verification';
 
 @Module({
-  controllers: [RestaurantSignupController],
+  controllers: [
+    RestaurantSignupController,
+    RestaurantVerificationController,
+  ],
   providers: [
     InMemoryStore,
     SystemClock,
@@ -20,6 +28,8 @@ import {
     VerificationTokenSource,
     FrontendOrigin,
     VerificationUrlLogger,
+    RestaurantSessionSigner,
+    VerificationDtoFailureInterceptor,
   ],
   exports: [InMemoryStore],
 })

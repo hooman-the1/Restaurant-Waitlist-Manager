@@ -31,6 +31,10 @@ export interface VerificationTokenRecord {
   restaurantId: number;
 }
 
+export type RestaurantVerificationResult =
+  | { kind: 'verified'; restaurant: RestaurantRecord }
+  | { kind: 'invalid' };
+
 export type FinalWaitlistStatus = 'seated' | 'cancelled' | 'no-show';
 export type WaitlistStatus = 'active' | FinalWaitlistStatus;
 
@@ -216,6 +220,38 @@ export class InMemoryStore {
     this.verificationTokens.delete(token);
 
     return { ...record };
+  }
+
+  verifyRestaurantWithToken(token: string): RestaurantVerificationResult {
+    const verification = this.verificationTokens.get(token);
+    if (verification === undefined) {
+      return { kind: 'invalid' };
+    }
+
+    const restaurant = this.restaurants.get(verification.restaurantId);
+    if (restaurant === undefined || restaurant.verified) {
+      this.verificationTokens.delete(token);
+      return { kind: 'invalid' };
+    }
+
+    const verifiedRestaurant = cloneRestaurant({
+      ...restaurant,
+      verified: true,
+    });
+    this.restaurants.set(restaurant.id, verifiedRestaurant);
+    try {
+      if (!this.verificationTokens.delete(token)) {
+        throw new Error('Verification token disappeared during commit.');
+      }
+    } catch (error: unknown) {
+      this.restaurants.set(restaurant.id, restaurant);
+      throw error;
+    }
+
+    return {
+      kind: 'verified',
+      restaurant: cloneRestaurant(verifiedRestaurant),
+    };
   }
 
   createWaitlistEntry(
