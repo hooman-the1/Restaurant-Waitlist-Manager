@@ -1,0 +1,661 @@
+openapi: 3.1.0
+info:
+  title: Restaurant Waitlist Manager API
+  version: 1.0.0
+  description: |
+    HTTP contract required by the Angular application in `front/`.
+
+    The frontend currently uses backend-independent service interfaces and mock
+    implementations. This document maps every operation in those interfaces to a
+    stateless REST endpoint. Restaurant staff authentication uses a signed,
+    HttpOnly, SameSite browser-session cookie. Customer status tokens and staff
+    action references are opaque values; they are never database identifiers.
+servers:
+  - url: http://localhost:8000
+    description: Local FastAPI server
+tags:
+  - name: Restaurant accounts
+  - name: Public waitlist
+  - name: Private status
+  - name: Restaurant dashboard
+
+paths:
+  /api/restaurants:
+    post:
+      tags: [Restaurant accounts]
+      operationId: signupRestaurant
+      summary: Create an unverified restaurant account
+      description: |
+        Creates the restaurant and emits its single-use verification URL through
+        the backend's local-development delivery mechanism. This endpoint does not
+        create an authenticated session.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestaurantSignupInput'
+            example:
+              restaurantName: Demo Restaurant
+              email: owner@example.com
+              password: correct-horse
+      responses:
+        '201':
+          description: Restaurant account created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/ValidationFailure'
+        '409':
+          description: The normalized restaurant name, generated slug, or email is already in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/restaurant-verifications:
+    post:
+      tags: [Restaurant accounts]
+      operationId: verifyRestaurant
+      summary: Consume a single-use restaurant verification token
+      description: |
+        Verifies the restaurant and starts its browser session. The success
+        response sets the signed `restaurant_session` cookie; the JSON body is the
+        frontend's verification success result.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerificationInput'
+            example:
+              token: verification-opaque-token
+      responses:
+        '200':
+          description: Verification succeeded and the restaurant session was created.
+          headers:
+            Set-Cookie:
+              description: Signed HttpOnly SameSite browser-session cookie with no explicit expiry.
+              schema:
+                type: string
+                example: restaurant_session=signed-value; Path=/; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          description: The token is missing, invalid, or has already been used.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvalidOrUsedVerificationTokenFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/restaurant-session:
+    get:
+      tags: [Restaurant accounts]
+      operationId: checkDashboardAccess
+      summary: Check whether the current restaurant session may use the dashboard
+      description: Used by the Angular route guard. The backend remains authoritative on all protected operations.
+      security:
+        - restaurantSession: []
+      responses:
+        '200':
+          description: The session belongs to a verified restaurant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardAccessAllowed'
+        '401':
+          $ref: '#/components/responses/UnauthorizedFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/restaurants/{restaurantSlug}:
+    get:
+      tags: [Public waitlist]
+      operationId: lookupPublicRestaurant
+      summary: Load the public restaurant waitlist page data
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantSlug'
+      responses:
+        '200':
+          description: Public restaurant data found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicWaitlistLookupSuccess'
+        '404':
+          $ref: '#/components/responses/NotFoundFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/restaurants/{restaurantSlug}/waitlist-entries:
+    post:
+      tags: [Public waitlist]
+      operationId: joinWaitlist
+      summary: Join a restaurant's active waitlist
+      description: |
+        Creates one active entry. A normalized phone number may have at most one
+        active entry for the restaurant. The returned private status token must be
+        treated as an unguessable capability and placed in the frontend status URL.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/RestaurantSlug'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinWaitlistInput'
+            example:
+              customerName: Morgan Lee
+              phone: (555) 010-1000
+              partySize: 6
+      responses:
+        '201':
+          description: Waitlist entry created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinWaitlistSuccess'
+        '400':
+          $ref: '#/components/responses/ValidationFailure'
+        '404':
+          $ref: '#/components/responses/NotFoundFailure'
+        '409':
+          description: The normalized phone number already has an active entry for this restaurant.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicatePhoneFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/waitlist-entries/{privateToken}:
+    get:
+      tags: [Private status]
+      operationId: loadPrivateStatus
+      summary: Load private status for a waitlist entry
+      description: |
+        The private token in the path authorizes this lookup; no restaurant session
+        is required. Active responses expose only restaurant name and position.
+        Resolved responses expose only restaurant name and final status. Clients
+        poll this operation every 30 seconds only while the entry is active.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PrivateToken'
+      responses:
+        '200':
+          description: Current private status. Clients must not cache this response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ActivePrivateStatusView'
+                  - $ref: '#/components/schemas/ResolvedPrivateStatusView'
+                discriminator:
+                  propertyName: kind
+        '404':
+          $ref: '#/components/responses/NotFoundFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/waitlist-entries/{privateToken}/cancellations:
+    post:
+      tags: [Private status]
+      operationId: cancelWaitlistEntry
+      summary: Cancel an active waitlist entry
+      description: |
+        The private token authorizes immediate cancellation. This is a state
+        transition, not a hard delete. Repeating the operation after the entry is
+        no longer active returns not found.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/PrivateToken'
+      responses:
+        '200':
+          description: The entry was cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationSuccess'
+        '404':
+          $ref: '#/components/responses/NotFoundFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/dashboard:
+    get:
+      tags: [Restaurant dashboard]
+      operationId: loadDashboard
+      summary: Load the authenticated restaurant's dashboard
+      description: Returns active entries in FIFO order and entries resolved during the current server-local day.
+      security:
+        - restaurantSession: []
+      responses:
+        '200':
+          description: Dashboard loaded. Clients must not cache this response.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardLoadSuccess'
+        '401':
+          $ref: '#/components/responses/UnauthorizedFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+  /api/dashboard/waitlist-entries/{actionReference}:
+    patch:
+      tags: [Restaurant dashboard]
+      operationId: resolveWaitlistEntry
+      summary: Resolve one active dashboard entry
+      description: |
+        Immediately marks an active entry as seated, cancelled, or no-show. The
+        opaque action reference is scoped to the authenticated restaurant and is
+        not a customer status token or database identifier. Resolution cannot be
+        undone through the API.
+      security:
+        - restaurantSession: []
+      parameters:
+        - $ref: '#/components/parameters/ActionReference'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffResolutionInput'
+            example:
+              resolution: seated
+      responses:
+        '200':
+          description: Entry resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          $ref: '#/components/responses/ValidationFailure'
+        '401':
+          $ref: '#/components/responses/UnauthorizedFailure'
+        '404':
+          $ref: '#/components/responses/NotFoundFailure'
+        '500':
+          $ref: '#/components/responses/UnexpectedFailure'
+
+components:
+  securitySchemes:
+    restaurantSession:
+      type: apiKey
+      in: cookie
+      name: restaurant_session
+      description: |
+        Signed HttpOnly SameSite browser-session cookie issued after successful
+        verification. It has no explicit expiration. Browser clients must send
+        credentialed requests. There are no bearer, access, refresh, or CSRF tokens.
+
+  parameters:
+    RestaurantSlug:
+      name: restaurantSlug
+      in: path
+      required: true
+      description: Public slug generated from the unique restaurant name.
+      schema:
+        type: string
+        minLength: 1
+        example: demo-restaurant
+    PrivateToken:
+      name: privateToken
+      in: path
+      required: true
+      description: Unguessable token shown only in the customer's private status URL.
+      schema:
+        type: string
+        minLength: 1
+        example: 8f4d6e2b-1a73-4c95-b0e8-62d9f71a3c44
+    ActionReference:
+      name: actionReference
+      in: path
+      required: true
+      description: Opaque staff-action reference returned only in an authenticated dashboard response.
+      schema:
+        type: string
+        minLength: 1
+        example: 9c777a3d-b7ed-4c86-95ce-7f456a62ff11
+
+  responses:
+    ValidationFailure:
+      description: The submitted values failed backend validation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationFailure'
+    UnauthorizedFailure:
+      description: The restaurant session cookie is missing, invalid, or belongs to an unverified account.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnauthorizedFailure'
+    NotFoundFailure:
+      description: The requested restaurant or opaque waitlist reference was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/NotFoundFailure'
+    UnexpectedFailure:
+      description: An unexpected backend failure occurred. No internal details are exposed.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UnexpectedFailure'
+
+  schemas:
+    RestaurantSignupInput:
+      type: object
+      additionalProperties: false
+      required: [restaurantName, email, password]
+      properties:
+        restaurantName:
+          type: string
+          minLength: 1
+          description: Trimmed by the backend with repeated internal whitespace collapsed; unique case-insensitively.
+          example: Demo Restaurant
+        email:
+          type: string
+          format: email
+          description: Unique restaurant email address.
+          example: owner@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          writeOnly: true
+          example: correct-horse
+
+    VerificationInput:
+      type: object
+      additionalProperties: false
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+          description: Single-use, non-expiring verification token from the verification link.
+          example: verification-opaque-token
+
+    JoinWaitlistInput:
+      type: object
+      additionalProperties: false
+      required: [customerName, phone, partySize]
+      properties:
+        customerName:
+          type: string
+          minLength: 1
+          description: Preserved as entered; duplicate names are allowed.
+          example: Morgan Lee
+        phone:
+          type: string
+          minLength: 1
+          description: Basic phone number; spaces, dashes, and parentheses are ignored for duplicate detection.
+          example: (555) 010-1000
+        partySize:
+          type: integer
+          minimum: 1
+          maximum: 30
+          example: 6
+
+    StaffResolutionInput:
+      type: object
+      additionalProperties: false
+      required: [resolution]
+      properties:
+        resolution:
+          $ref: '#/components/schemas/FinalStatus'
+
+    Success:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: success
+
+    ValidationFailure:
+      type: object
+      additionalProperties: false
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          const: validation
+        message:
+          type: string
+          example: Party size must be an integer from 1 to 30.
+
+    UnauthorizedFailure:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: unauthorized
+
+    NotFoundFailure:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: not-found
+
+    UnexpectedFailure:
+      type: object
+      additionalProperties: false
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          const: unexpected
+        message:
+          type: string
+          const: Something went wrong. Please try again.
+
+    InvalidOrUsedVerificationTokenFailure:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: invalid-or-used-token
+
+    DashboardAccessAllowed:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: allowed
+
+    PublicRestaurantView:
+      type: object
+      additionalProperties: false
+      required: [restaurantName]
+      properties:
+        restaurantName:
+          type: string
+          example: Demo Restaurant
+
+    PublicWaitlistLookupSuccess:
+      type: object
+      additionalProperties: false
+      required: [kind, restaurant]
+      properties:
+        kind:
+          type: string
+          const: success
+        restaurant:
+          $ref: '#/components/schemas/PublicRestaurantView'
+
+    JoinWaitlistSuccess:
+      type: object
+      additionalProperties: false
+      required: [kind, privateStatusToken]
+      properties:
+        kind:
+          type: string
+          const: success
+        privateStatusToken:
+          type: string
+          minLength: 1
+          description: Unguessable token used to construct the customer's private status URL.
+          example: 8f4d6e2b-1a73-4c95-b0e8-62d9f71a3c44
+
+    DuplicatePhoneFailure:
+      type: object
+      additionalProperties: false
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          const: duplicate-phone
+        message:
+          type: string
+          const: This phone number is already on the waitlist.
+
+    FinalStatus:
+      type: string
+      enum: [seated, cancelled, no-show]
+
+    ActivePrivateStatusView:
+      type: object
+      additionalProperties: false
+      required: [kind, restaurantName, position]
+      properties:
+        kind:
+          type: string
+          const: active
+        restaurantName:
+          type: string
+          example: Demo Restaurant
+        position:
+          type: integer
+          minimum: 1
+          example: 1
+
+    ResolvedPrivateStatusView:
+      type: object
+      additionalProperties: false
+      required: [kind, restaurantName, finalStatus]
+      properties:
+        kind:
+          type: string
+          const: resolved
+        restaurantName:
+          type: string
+          example: Demo Restaurant
+        finalStatus:
+          $ref: '#/components/schemas/FinalStatus'
+
+    CancellationSuccess:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          const: cancelled
+
+    ActiveDashboardEntry:
+      type: object
+      additionalProperties: false
+      required: [position, customerName, phone, partySize, actionReference]
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          example: 1
+        customerName:
+          type: string
+          example: Morgan Lee
+        phone:
+          type: string
+          example: (555) 010-1000
+        partySize:
+          type: integer
+          minimum: 1
+          maximum: 30
+          example: 6
+        actionReference:
+          type: string
+          minLength: 1
+          description: Opaque staff action reference; never expose it on customer-facing pages.
+          example: 9c777a3d-b7ed-4c86-95ce-7f456a62ff11
+
+    ResolvedDashboardEntry:
+      type: object
+      additionalProperties: false
+      required: [customerName, partySize, finalStatus]
+      properties:
+        customerName:
+          type: string
+          example: Alex Chen
+        partySize:
+          type: integer
+          minimum: 1
+          maximum: 30
+          example: 4
+        finalStatus:
+          $ref: '#/components/schemas/FinalStatus'
+
+    DashboardView:
+      type: object
+      additionalProperties: false
+      required: [restaurantName, activeEntries, resolvedToday]
+      properties:
+        restaurantName:
+          type: string
+          example: Demo Restaurant
+        activeEntries:
+          type: array
+          description: Active entries in strict FIFO order with one-based positions.
+          items:
+            $ref: '#/components/schemas/ActiveDashboardEntry'
+        resolvedToday:
+          type: array
+          description: Entries resolved during the current server-local day.
+          items:
+            $ref: '#/components/schemas/ResolvedDashboardEntry'
+
+    DashboardLoadSuccess:
+      type: object
+      additionalProperties: false
+      required: [kind, dashboard]
+      properties:
+        kind:
+          type: string
+          const: success
+        dashboard:
+          $ref: '#/components/schemas/DashboardView'
