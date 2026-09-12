@@ -1,14 +1,17 @@
 import {
+  Body,
   CanActivate,
   Controller,
   ExecutionContext,
   Get,
   Injectable,
+  Param,
+  Patch,
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
 
-import { unexpectedFailure } from './api-failures';
+import { notFoundFailure, unexpectedFailure } from './api-failures';
 import { SystemClock } from './demo-data-seeder';
 import { DashboardSnapshot, InMemoryStore } from './in-memory-store';
 import {
@@ -16,6 +19,7 @@ import {
   RestaurantPrincipal,
   RestaurantSessionGuard,
 } from './restaurant-session';
+import { StaffResolutionDto } from './request-dtos';
 
 @Injectable()
 export class DashboardNoStoreGuard implements CanActivate {
@@ -49,5 +53,33 @@ export class DashboardController {
     }
 
     return { kind: 'success', dashboard };
+  }
+}
+
+@Controller('api/dashboard/waitlist-entries')
+@UseGuards(RestaurantSessionGuard)
+export class StaffWaitlistResolutionController {
+  constructor(
+    private readonly store: InMemoryStore,
+    private readonly clock: SystemClock,
+  ) {}
+
+  @Patch(':actionReference')
+  resolve(
+    @CurrentRestaurant() principal: RestaurantPrincipal,
+    @Param('actionReference') actionReference: string,
+    @Body() input: StaffResolutionDto,
+  ): { kind: 'success' } {
+    const result = this.store.resolveWaitlistEntryByActionReference(
+      principal.id,
+      actionReference,
+      input.resolution,
+      () => this.clock.now(),
+    );
+    if (result.kind === 'not-found') {
+      throw notFoundFailure();
+    }
+
+    return { kind: 'success' };
   }
 }

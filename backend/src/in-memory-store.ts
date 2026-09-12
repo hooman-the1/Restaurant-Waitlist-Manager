@@ -112,6 +112,10 @@ export interface DashboardSnapshot {
   resolvedToday: DashboardResolvedEntry[];
 }
 
+export type StaffWaitlistResolutionResult =
+  | { kind: 'resolved'; entry: ResolvedWaitlistEntryRecord }
+  | { kind: 'not-found' };
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -458,6 +462,39 @@ export class InMemoryStore {
       activeEntries,
       resolvedToday,
     };
+  }
+
+  resolveWaitlistEntryByActionReference(
+    restaurantId: number,
+    actionReference: string,
+    status: FinalWaitlistStatus,
+    readResolutionTime: () => Date,
+  ): StaffWaitlistResolutionResult {
+    const entry = [...this.waitlistEntries.values()].find(
+      (candidate) => candidate.actionReference === actionReference,
+    );
+    if (
+      entry === undefined ||
+      entry.restaurantId !== restaurantId ||
+      entry.status !== 'active' ||
+      !this.restaurants.has(restaurantId)
+    ) {
+      return { kind: 'not-found' };
+    }
+
+    const resolved = cloneWaitlistEntry({
+      ...entry,
+      status,
+      resolvedAt: readResolutionTime(),
+    });
+    try {
+      this.waitlistEntries.set(entry.id, resolved);
+    } catch (error: unknown) {
+      this.waitlistEntries.set(entry.id, entry);
+      throw error;
+    }
+
+    return { kind: 'resolved', entry: cloneWaitlistEntry(resolved) };
   }
 
   hasActivePhoneDuplicate(

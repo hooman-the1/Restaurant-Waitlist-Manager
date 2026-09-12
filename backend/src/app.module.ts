@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 
-import { DashboardController, DashboardNoStoreGuard } from './dashboard';
+import {
+  DashboardController,
+  DashboardNoStoreGuard,
+  StaffWaitlistResolutionController,
+} from './dashboard';
 import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
 import { PrivateWaitlistStatusController } from './private-waitlist-status';
@@ -36,6 +40,7 @@ import {
     PublicWaitlistJoinController,
     PrivateWaitlistStatusController,
     DashboardController,
+    StaffWaitlistResolutionController,
   ],
   providers: [
     InMemoryStore,
