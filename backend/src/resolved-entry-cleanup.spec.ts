@@ -179,7 +179,7 @@ describe('ResolvedEntryCleanup', () => {
     expect(store.findWaitlistEntryById(boundary.id)).toEqual(boundary);
   });
 
-  it('contains scheduled failures, reports no sensitive error detail, and permits a complete retry', () => {
+  it('contains scheduled failures, reports no sensitive error detail, and permits a complete retry', async () => {
     const store = new InMemoryStore();
     store.createWaitlistEntry(
       entryInput(
@@ -202,14 +202,14 @@ describe('ResolvedEntryCleanup', () => {
       { report },
     );
 
-    expect(() => cleanup.runScheduled()).not.toThrow();
+    await expect(cleanup.runScheduled()).resolves.toBeUndefined();
     expect(report).toHaveBeenCalledWith();
     expect(JSON.stringify(report.mock.calls)).not.toContain('sensitive');
-    expect(cleanup.runScheduled()).toBe(1);
+    await expect(cleanup.runScheduled()).resolves.toBe(1);
     expect(cleanupStore).toHaveBeenCalledTimes(2);
   });
 
-  it('lets startup failures reject instead of reporting and swallowing them', () => {
+  it('lets startup failures reject instead of reporting and swallowing them', async () => {
     const failure = new Error('clock unavailable');
     const report = jest.fn();
     const cleanup = new ResolvedEntryCleanup(
@@ -222,7 +222,7 @@ describe('ResolvedEntryCleanup', () => {
       { report },
     );
 
-    expect(() => cleanup.onApplicationBootstrap()).toThrow(failure);
+    await expect(cleanup.onApplicationBootstrap()).rejects.toThrow(failure);
     expect(report).not.toHaveBeenCalled();
   });
 

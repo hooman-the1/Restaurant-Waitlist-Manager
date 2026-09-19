@@ -5,32 +5,31 @@ import {
   Optional,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type BetterSqlite3 from 'better-sqlite3';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 
 import { createDatabaseDataSource } from './database-configuration';
+import {
+  RestaurantSchema,
+  VerificationTokenSchema,
+  WaitlistEntrySchema,
+} from './database-entities';
 import {
   CreateRestaurantInput,
   CreateWaitlistEntryInput,
   FinalWaitlistStatus,
   InMemoryStore,
+  RestaurantRecord,
   RestaurantSignupCommitResult,
   RestaurantVerificationResult,
-  StoreSnapshot,
-  UpdateRestaurantInput,
-  VerificationTokenRecord,
-  WaitlistCancellationResult,
-  WaitlistJoinCommitResult,
-  WaitlistJoinInput,
-  WaitlistEntryRecord,
-  RestaurantRecord,
   ResolvedWaitlistEntryRecord,
   StaffWaitlistResolutionResult,
+  StoreSnapshot,
+  VerificationTokenRecord,
+  WaitlistCancellationResult,
+  WaitlistEntryRecord,
+  WaitlistJoinCommitResult,
+  WaitlistJoinInput,
 } from './in-memory-store';
-
-interface SqliteDriverWithConnection {
-  databaseConnection: BetterSqlite3.Database;
-}
 
 @Injectable()
 export class DatabaseStore
@@ -38,7 +37,7 @@ export class DatabaseStore
   implements OnModuleInit, OnModuleDestroy
 {
   private dataSource?: DataSource;
-  private database?: BetterSqlite3.Database;
+  private mutationQueue: Promise<void> = Promise.resolve();
 
   constructor(@Optional() private readonly config?: ConfigService) {
     super();
@@ -50,91 +49,78 @@ export class DatabaseStore
       return;
     }
     this.dataSource = await createDatabaseDataSource(databaseUrl).initialize();
-    this.database = (
-      this.dataSource.driver as unknown as SqliteDriverWithConnection
-    ).databaseConnection;
-    super.restoreState(this.readSnapshot());
+    super.restoreState(await this.readSnapshot());
   }
 
   async onModuleDestroy(): Promise<void> {
+    await this.mutationQueue;
     if (this.dataSource?.isInitialized) {
       await this.dataSource.destroy();
     }
   }
 
-  override createRestaurant(input: CreateRestaurantInput): RestaurantRecord {
-    return this.mutate(() => super.createRestaurant(input));
+  override createRestaurantPersistent(
+    input: CreateRestaurantInput,
+  ): Promise<RestaurantRecord> {
+    return this.mutatePersistent(() => this.createRestaurant(input));
   }
 
-  override updateRestaurant(
-    id: number,
-    updates: UpdateRestaurantInput,
-  ): RestaurantRecord | undefined {
-    return this.mutate(() => super.updateRestaurant(id, updates));
-  }
-
-  override commitRestaurantSignup(
+  override commitRestaurantSignupPersistent(
     input: CreateRestaurantInput,
     verificationToken: string,
-  ): RestaurantSignupCommitResult {
-    return this.mutate(() =>
-      super.commitRestaurantSignup(input, verificationToken),
+  ): Promise<RestaurantSignupCommitResult> {
+    return this.mutatePersistent(() =>
+      this.commitRestaurantSignup(input, verificationToken),
     );
   }
 
-  override rollbackRestaurantSignup(
+  override rollbackRestaurantSignupPersistent(
     restaurantId: number,
     verificationToken: string,
-  ): boolean {
-    return this.mutate(() =>
-      super.rollbackRestaurantSignup(restaurantId, verificationToken),
+  ): Promise<boolean> {
+    return this.mutatePersistent(() =>
+      this.rollbackRestaurantSignup(restaurantId, verificationToken),
     );
   }
 
-  override createVerificationToken(
+  override createVerificationTokenPersistent(
     token: string,
     restaurantId: number,
-  ): VerificationTokenRecord {
-    return this.mutate(() =>
-      super.createVerificationToken(token, restaurantId),
+  ): Promise<VerificationTokenRecord> {
+    return this.mutatePersistent(() =>
+      this.createVerificationToken(token, restaurantId),
     );
   }
 
-  override consumeVerificationToken(
+  override verifyRestaurantWithTokenPersistent(
     token: string,
-  ): VerificationTokenRecord | undefined {
-    return this.mutate(() => super.consumeVerificationToken(token));
+  ): Promise<RestaurantVerificationResult> {
+    return this.mutatePersistent(() => this.verifyRestaurantWithToken(token));
   }
 
-  override verifyRestaurantWithToken(
-    token: string,
-  ): RestaurantVerificationResult {
-    return this.mutate(() => super.verifyRestaurantWithToken(token));
-  }
-
-  override createWaitlistEntry(
+  override createWaitlistEntryPersistent(
     input: CreateWaitlistEntryInput,
-  ): WaitlistEntryRecord {
-    return this.mutate(() => super.createWaitlistEntry(input));
+  ): Promise<WaitlistEntryRecord> {
+    return this.mutatePersistent(() => this.createWaitlistEntry(input));
   }
 
-  override cancelWaitlistEntry(
+  override cancelWaitlistEntryPersistent(
     token: string,
     readResolutionTime: () => Date,
-  ): WaitlistCancellationResult {
-    return this.mutate(() =>
-      super.cancelWaitlistEntry(token, readResolutionTime),
+  ): Promise<WaitlistCancellationResult> {
+    return this.mutatePersistent(() =>
+      this.cancelWaitlistEntry(token, readResolutionTime),
     );
   }
 
-  override resolveWaitlistEntryByActionReference(
+  override resolveWaitlistEntryByActionReferencePersistent(
     restaurantId: number,
     actionReference: string,
     status: FinalWaitlistStatus,
     readResolutionTime: () => Date,
-  ): StaffWaitlistResolutionResult {
-    return this.mutate(() =>
-      super.resolveWaitlistEntryByActionReference(
+  ): Promise<StaffWaitlistResolutionResult> {
+    return this.mutatePersistent(() =>
+      this.resolveWaitlistEntryByActionReference(
         restaurantId,
         actionReference,
         status,
@@ -143,170 +129,152 @@ export class DatabaseStore
     );
   }
 
-  override commitWaitlistJoin(
+  override commitWaitlistJoinPersistent(
     restaurantSlug: string,
     input: WaitlistJoinInput,
-  ): WaitlistJoinCommitResult {
-    return this.mutate(() => super.commitWaitlistJoin(restaurantSlug, input));
-  }
-
-  override resolveWaitlistEntry(
-    id: number,
-    status: FinalWaitlistStatus,
-    resolvedAt: Date,
-  ): ResolvedWaitlistEntryRecord | undefined {
-    return this.mutate(() =>
-      super.resolveWaitlistEntry(id, status, resolvedAt),
+  ): Promise<WaitlistJoinCommitResult> {
+    return this.mutatePersistent(() =>
+      this.commitWaitlistJoin(restaurantSlug, input),
     );
   }
 
-  override removeWaitlistEntry(id: number): boolean {
-    return this.mutate(() => super.removeWaitlistEntry(id));
+  override resolveWaitlistEntryPersistent(
+    id: number,
+    status: FinalWaitlistStatus,
+    resolvedAt: Date,
+  ): Promise<ResolvedWaitlistEntryRecord | undefined> {
+    return this.mutatePersistent(() =>
+      this.resolveWaitlistEntry(id, status, resolvedAt),
+    );
   }
 
-  override removeResolvedWaitlistEntriesBefore(cutoff: Date): number {
-    return this.mutate(() => super.removeResolvedWaitlistEntriesBefore(cutoff));
+  override removeResolvedWaitlistEntriesBeforePersistent(
+    cutoff: Date,
+  ): Promise<number> {
+    return this.mutatePersistent(() =>
+      this.removeResolvedWaitlistEntriesBefore(cutoff),
+    );
   }
 
-  override reset(): void {
-    super.reset();
-    if (this.database !== undefined) {
-      this.writeSnapshot(this.snapshotState());
+  private mutatePersistent<T>(operation: () => T): Promise<T> {
+    if (this.dataSource === undefined) {
+      return Promise.resolve(operation());
     }
+
+    const execute = async (): Promise<T> => {
+      const before = this.snapshotState();
+      try {
+        const result = operation();
+        await this.writeSnapshot(this.snapshotState());
+        return result;
+      } catch (error: unknown) {
+        super.restoreState(before);
+        throw error;
+      }
+    };
+    const scheduled = this.mutationQueue.then(execute, execute);
+    this.mutationQueue = scheduled.then(
+      () => undefined,
+      () => undefined,
+    );
+    return scheduled;
   }
 
-  private mutate<T>(operation: () => T): T {
-    if (this.database === undefined) {
-      return operation();
-    }
-
-    const before = this.snapshotState();
-    try {
-      const result = operation();
-      this.writeSnapshot(this.snapshotState());
-      return result;
-    } catch (error: unknown) {
-      super.restoreState(before);
-      throw error;
-    }
-  }
-
-  private writeSnapshot(snapshot: StoreSnapshot): void {
-    const database = this.requireDatabase();
-    database.transaction(() => {
-      database.prepare('DELETE FROM verification_tokens').run();
-      database.prepare('DELETE FROM waitlist_entries').run();
-      database.prepare('DELETE FROM restaurants').run();
-
-      const insertRestaurant = database.prepare(
-        'INSERT INTO restaurants (id, name, normalizedName, email, normalizedEmail, passwordHash, slug, verified, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      );
-      for (const restaurant of snapshot.restaurants) {
-        insertRestaurant.run(
-          restaurant.id,
-          restaurant.name,
-          restaurant.normalizedName,
-          restaurant.email,
-          restaurant.normalizedEmail,
-          restaurant.passwordHash,
-          restaurant.slug,
-          restaurant.verified ? 1 : 0,
-          restaurant.createdAt.toISOString(),
+  private async writeSnapshot(snapshot: StoreSnapshot): Promise<void> {
+    const dataSource = this.requireDataSource();
+    await dataSource.manager.transaction(async (manager) => {
+      await this.clearTables(manager);
+      if (snapshot.restaurants.length > 0) {
+        await manager.getRepository(RestaurantSchema).insert(
+          snapshot.restaurants.map((restaurant) => ({
+            ...restaurant,
+          })),
         );
       }
-
-      const insertToken = database.prepare(
-        'INSERT INTO verification_tokens (token, restaurantId) VALUES (?, ?)',
-      );
-      for (const token of snapshot.verificationTokens) {
-        insertToken.run(token.token, token.restaurantId);
+      if (snapshot.verificationTokens.length > 0) {
+        await manager
+          .getRepository(VerificationTokenSchema)
+          .insert(snapshot.verificationTokens);
       }
-
-      const insertEntry = database.prepare(
-        'INSERT INTO waitlist_entries (id, restaurantId, customerName, phone, normalizedPhone, activePhoneKey, partySize, privateStatusToken, actionReference, joinedAt, status, resolvedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      );
-      for (const entry of snapshot.waitlistEntries) {
-        insertEntry.run(
-          entry.id,
-          entry.restaurantId,
-          entry.customerName,
-          entry.phone,
-          entry.normalizedPhone,
-          entry.status === 'active' ? entry.normalizedPhone : null,
-          entry.partySize,
-          entry.privateStatusToken,
-          entry.actionReference,
-          entry.joinedAt.toISOString(),
-          entry.status,
-          entry.status === 'active' ? null : entry.resolvedAt.toISOString(),
+      if (snapshot.waitlistEntries.length > 0) {
+        await manager.getRepository(WaitlistEntrySchema).insert(
+          snapshot.waitlistEntries.map((entry) => ({
+            ...entry,
+            activePhoneKey:
+              entry.status === 'active' ? entry.normalizedPhone : null,
+            resolvedAt: entry.status === 'active' ? null : entry.resolvedAt,
+          })),
         );
       }
-    })();
+    });
   }
 
-  private readSnapshot(): StoreSnapshot {
-    const database = this.requireDatabase();
-    const restaurants = database
-      .prepare('SELECT * FROM restaurants ORDER BY id')
-      .all() as Array<Record<string, unknown>>;
-    const tokens = database
-      .prepare('SELECT * FROM verification_tokens ORDER BY token')
-      .all() as Array<Record<string, unknown>>;
-    const entries = database
-      .prepare('SELECT * FROM waitlist_entries ORDER BY id')
-      .all() as Array<Record<string, unknown>>;
+  private async clearTables(manager: EntityManager): Promise<void> {
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(VerificationTokenSchema)
+      .execute();
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(WaitlistEntrySchema)
+      .execute();
+    await manager
+      .createQueryBuilder()
+      .delete()
+      .from(RestaurantSchema)
+      .execute();
+  }
 
-    const restaurantRecords = restaurants.map((row) => ({
-      id: Number(row.id),
-      name: String(row.name),
-      normalizedName: String(row.normalizedName),
-      email: String(row.email),
-      normalizedEmail: String(row.normalizedEmail),
-      passwordHash: String(row.passwordHash),
-      slug: String(row.slug),
-      verified: Boolean(row.verified),
-      createdAt: new Date(String(row.createdAt)),
-    }));
-    const waitlistRecords = entries.map((row): WaitlistEntryRecord => {
+  private async readSnapshot(): Promise<StoreSnapshot> {
+    const dataSource = this.requireDataSource();
+    const [restaurants, tokens, entries] = await Promise.all([
+      dataSource.getRepository(RestaurantSchema).find({ order: { id: 'ASC' } }),
+      dataSource
+        .getRepository(VerificationTokenSchema)
+        .find({ order: { token: 'ASC' } }),
+      dataSource
+        .getRepository(WaitlistEntrySchema)
+        .find({ order: { joinedAt: 'ASC', id: 'ASC' } }),
+    ]);
+    const waitlistEntries = entries.map((entry): WaitlistEntryRecord => {
       const base = {
-        id: Number(row.id),
-        restaurantId: Number(row.restaurantId),
-        customerName: String(row.customerName),
-        phone: String(row.phone),
-        normalizedPhone: String(row.normalizedPhone),
-        partySize: Number(row.partySize),
-        privateStatusToken: String(row.privateStatusToken),
-        actionReference: String(row.actionReference),
-        joinedAt: new Date(String(row.joinedAt)),
+        id: entry.id,
+        restaurantId: entry.restaurantId,
+        customerName: entry.customerName,
+        phone: entry.phone,
+        normalizedPhone: entry.normalizedPhone,
+        partySize: entry.partySize,
+        privateStatusToken: entry.privateStatusToken,
+        actionReference: entry.actionReference,
+        joinedAt: entry.joinedAt,
       };
-      if (row.status === 'active') {
+      if (entry.status === 'active') {
         return { ...base, status: 'active' };
       }
       return {
         ...base,
-        status: row.status as FinalWaitlistStatus,
-        resolvedAt: new Date(String(row.resolvedAt)),
+        status: entry.status as FinalWaitlistStatus,
+        resolvedAt: entry.resolvedAt as Date,
       };
     });
 
     return {
-      restaurants: restaurantRecords,
-      verificationTokens: tokens.map((row) => ({
-        token: String(row.token),
-        restaurantId: Number(row.restaurantId),
-      })),
-      waitlistEntries: waitlistRecords,
+      restaurants,
+      verificationTokens: tokens,
+      waitlistEntries,
       nextRestaurantId:
-        Math.max(0, ...restaurantRecords.map((record) => record.id)) + 1,
+        Math.max(0, ...restaurants.map((restaurant) => restaurant.id)) + 1,
       nextWaitlistEntryId:
-        Math.max(0, ...waitlistRecords.map((record) => record.id)) + 1,
+        Math.max(0, ...waitlistEntries.map((entry) => entry.id)) + 1,
     };
   }
 
-  private requireDatabase(): BetterSqlite3.Database {
-    if (this.database === undefined) {
+  private requireDataSource(): DataSource {
+    if (this.dataSource === undefined) {
       throw new Error('Database is not initialized.');
     }
-    return this.database;
+    return this.dataSource;
   }
 }

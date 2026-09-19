@@ -651,6 +651,87 @@ export class InMemoryStore {
     return expiredIds.length;
   }
 
+  async createRestaurantPersistent(
+    input: CreateRestaurantInput,
+  ): Promise<RestaurantRecord> {
+    return this.createRestaurant(input);
+  }
+
+  async commitRestaurantSignupPersistent(
+    input: CreateRestaurantInput,
+    verificationToken: string,
+  ): Promise<RestaurantSignupCommitResult> {
+    return this.commitRestaurantSignup(input, verificationToken);
+  }
+
+  async rollbackRestaurantSignupPersistent(
+    restaurantId: number,
+    verificationToken: string,
+  ): Promise<boolean> {
+    return this.rollbackRestaurantSignup(restaurantId, verificationToken);
+  }
+
+  async createVerificationTokenPersistent(
+    token: string,
+    restaurantId: number,
+  ): Promise<VerificationTokenRecord> {
+    return this.createVerificationToken(token, restaurantId);
+  }
+
+  async verifyRestaurantWithTokenPersistent(
+    token: string,
+  ): Promise<RestaurantVerificationResult> {
+    return this.verifyRestaurantWithToken(token);
+  }
+
+  async createWaitlistEntryPersistent(
+    input: CreateWaitlistEntryInput,
+  ): Promise<WaitlistEntryRecord> {
+    return this.createWaitlistEntry(input);
+  }
+
+  async cancelWaitlistEntryPersistent(
+    token: string,
+    readResolutionTime: () => Date,
+  ): Promise<WaitlistCancellationResult> {
+    return this.cancelWaitlistEntry(token, readResolutionTime);
+  }
+
+  async resolveWaitlistEntryByActionReferencePersistent(
+    restaurantId: number,
+    actionReference: string,
+    status: FinalWaitlistStatus,
+    readResolutionTime: () => Date,
+  ): Promise<StaffWaitlistResolutionResult> {
+    return this.resolveWaitlistEntryByActionReference(
+      restaurantId,
+      actionReference,
+      status,
+      readResolutionTime,
+    );
+  }
+
+  async commitWaitlistJoinPersistent(
+    restaurantSlug: string,
+    input: WaitlistJoinInput,
+  ): Promise<WaitlistJoinCommitResult> {
+    return this.commitWaitlistJoin(restaurantSlug, input);
+  }
+
+  async resolveWaitlistEntryPersistent(
+    id: number,
+    status: FinalWaitlistStatus,
+    resolvedAt: Date,
+  ): Promise<ResolvedWaitlistEntryRecord | undefined> {
+    return this.resolveWaitlistEntry(id, status, resolvedAt);
+  }
+
+  async removeResolvedWaitlistEntriesBeforePersistent(
+    cutoff: Date,
+  ): Promise<number> {
+    return this.removeResolvedWaitlistEntriesBefore(cutoff);
+  }
+
   reset(): void {
     this.restaurants.clear();
     this.verificationTokens.clear();

@@ -1,7 +1,7 @@
-import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 
-import { SystemClock } from './demo-data-seeder';
+import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
 import { InMemoryStore } from './in-memory-store';
 
 export const RESOLVED_ENTRY_CLEANUP_JOB = 'resolved-entry-cleanup';
@@ -19,10 +19,12 @@ export class ResolvedEntryCleanup implements OnApplicationBootstrap {
     private readonly store: InMemoryStore,
     private readonly clock: SystemClock,
     private readonly failureReporter: CleanupFailureReporter,
+    @Optional() private readonly seeder?: DemoDataSeeder,
   ) {}
 
-  onApplicationBootstrap(): void {
-    this.run();
+  async onApplicationBootstrap(): Promise<void> {
+    await this.seeder?.seedPersistent();
+    await this.runPersistent();
   }
 
   run(): number {
@@ -35,13 +37,25 @@ export class ResolvedEntryCleanup implements OnApplicationBootstrap {
     return this.store.removeResolvedWaitlistEntriesBefore(startOfToday);
   }
 
+  async runPersistent(): Promise<number> {
+    const now = this.clock.now();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    return this.store.removeResolvedWaitlistEntriesBeforePersistent(
+      startOfToday,
+    );
+  }
+
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT, {
     name: RESOLVED_ENTRY_CLEANUP_JOB,
     waitForCompletion: true,
   })
-  runScheduled(): number | undefined {
+  async runScheduled(): Promise<number | undefined> {
     try {
-      return this.run();
+      return await this.runPersistent();
     } catch {
       this.failureReporter.report();
       return undefined;

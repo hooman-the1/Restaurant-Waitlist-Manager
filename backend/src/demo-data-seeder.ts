@@ -25,14 +25,42 @@ export class SystemClock {
 @Injectable()
 export class DemoDataSeeder implements OnApplicationBootstrap {
   private hasSeeded = false;
+  private seedPromise?: Promise<void>;
 
   constructor(
     private readonly store: InMemoryStore,
     private readonly clock: SystemClock,
   ) {}
 
-  onApplicationBootstrap(): void {
-    this.seed();
+  async onApplicationBootstrap(): Promise<void> {
+    await this.seedPersistent();
+  }
+
+  seedPersistent(): Promise<void> {
+    this.seedPromise ??= this.persistSeed().catch((error: unknown) => {
+      this.seedPromise = undefined;
+      throw error;
+    });
+    return this.seedPromise;
+  }
+
+  private async persistSeed(): Promise<void> {
+    if (this.hasSeeded) {
+      return;
+    }
+    if (this.store.findRestaurantBySlug(DEMO_ACCESS.publicSlug) !== undefined) {
+      this.hasSeeded = true;
+      return;
+    }
+
+    const now = this.clock.now();
+    const restaurant = await this.store.createRestaurantPersistent(
+      demoRestaurant(now),
+    );
+    for (const entry of demoEntries(restaurant.id, now)) {
+      await this.store.createWaitlistEntryPersistent(entry);
+    }
+    this.hasSeeded = true;
   }
 
   seed(): void {
@@ -46,19 +74,32 @@ export class DemoDataSeeder implements OnApplicationBootstrap {
     }
 
     const now = this.clock.now();
-    const restaurant = this.store.createRestaurant({
-      name: 'Demo Restaurant',
-      normalizedName: 'demo restaurant',
-      email: 'demo@example.com',
-      normalizedEmail: 'demo@example.com',
-      passwordHash: DEMO_PASSWORD_HASH,
-      slug: DEMO_ACCESS.publicSlug,
-      verified: true,
-      createdAt: now,
-    });
+    const restaurant = this.store.createRestaurant(demoRestaurant(now));
+    for (const entry of demoEntries(restaurant.id, now)) {
+      this.store.createWaitlistEntry(entry);
+    }
 
-    this.store.createWaitlistEntry({
-      restaurantId: restaurant.id,
+    this.hasSeeded = true;
+  }
+}
+
+function demoRestaurant(now: Date) {
+  return {
+    name: 'Demo Restaurant',
+    normalizedName: 'demo restaurant',
+    email: 'demo@example.com',
+    normalizedEmail: 'demo@example.com',
+    passwordHash: DEMO_PASSWORD_HASH,
+    slug: DEMO_ACCESS.publicSlug,
+    verified: true,
+    createdAt: now,
+  };
+}
+
+function demoEntries(restaurantId: number, now: Date) {
+  return [
+    {
+      restaurantId,
       customerName: 'Morgan Lee',
       phone: '(555) 010-1000',
       normalizedPhone: '5550101000',
@@ -66,10 +107,10 @@ export class DemoDataSeeder implements OnApplicationBootstrap {
       privateStatusToken: DEMO_ACCESS.activePrivateStatusToken,
       actionReference: MORGAN_ACTION_REFERENCE,
       joinedAt: now,
-      status: 'active',
-    });
-    this.store.createWaitlistEntry({
-      restaurantId: restaurant.id,
+      status: 'active' as const,
+    },
+    {
+      restaurantId,
       customerName: 'Sam Rivera',
       phone: '555-010-2000',
       normalizedPhone: '5550102000',
@@ -77,10 +118,10 @@ export class DemoDataSeeder implements OnApplicationBootstrap {
       privateStatusToken: SAM_PRIVATE_STATUS_TOKEN,
       actionReference: SAM_ACTION_REFERENCE,
       joinedAt: now,
-      status: 'active',
-    });
-    this.store.createWaitlistEntry({
-      restaurantId: restaurant.id,
+      status: 'active' as const,
+    },
+    {
+      restaurantId,
       customerName: 'Alex Chen',
       phone: '555-010-3000',
       normalizedPhone: '5550103000',
@@ -88,10 +129,8 @@ export class DemoDataSeeder implements OnApplicationBootstrap {
       privateStatusToken: DEMO_ACCESS.resolvedPrivateStatusToken,
       actionReference: ALEX_ACTION_REFERENCE,
       joinedAt: now,
-      status: 'seated',
+      status: 'seated' as const,
       resolvedAt: now,
-    });
-
-    this.hasSeeded = true;
-  }
+    },
+  ];
 }

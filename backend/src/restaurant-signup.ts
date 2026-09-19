@@ -107,7 +107,7 @@ export class RestaurantSignupController {
       throw unexpectedFailure();
     }
     const createdAt = this.clock.now();
-    const result = this.store.commitRestaurantSignup(
+    const result = await this.store.commitRestaurantSignupPersistent(
       {
         name,
         normalizedName,
@@ -133,7 +133,7 @@ export class RestaurantSignupController {
     try {
       this.logger.log(line);
     } catch (error: unknown) {
-      this.store.rollbackRestaurantSignup(
+      await this.store.rollbackRestaurantSignupPersistent(
         result.restaurant.id,
         verificationToken,
       );

@@ -50,10 +50,10 @@ export class PublicWaitlistJoinController {
     '/api/restaurants/{restaurantSlug}/waitlist-entries',
     'post',
   )
-  join(
+  async join(
     @Param('restaurantSlug') restaurantSlug: string,
     @Body() input: JoinWaitlistDto,
-  ): { kind: 'success'; privateStatusToken: string } {
+  ): Promise<{ kind: 'success'; privateStatusToken: string }> {
     const restaurant = this.store.findRestaurantBySlug(restaurantSlug);
     if (restaurant === undefined) {
       throw notFoundFailure();
@@ -85,15 +85,18 @@ export class PublicWaitlistJoinController {
         continue;
       }
 
-      const result = this.store.commitWaitlistJoin(restaurantSlug, {
-        customerName: input.customerName,
-        phone: input.phone,
-        normalizedPhone,
-        partySize: input.partySize,
-        privateStatusToken,
-        actionReference,
-        joinedAt: this.clock.now(),
-      });
+      const result = await this.store.commitWaitlistJoinPersistent(
+        restaurantSlug,
+        {
+          customerName: input.customerName,
+          phone: input.phone,
+          normalizedPhone,
+          partySize: input.partySize,
+          privateStatusToken,
+          actionReference,
+          joinedAt: this.clock.now(),
+        },
+      );
       if (result.kind === 'created') {
         return { kind: 'success', privateStatusToken };
       }

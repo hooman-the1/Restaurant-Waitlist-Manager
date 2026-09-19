@@ -75,17 +75,18 @@ export class StaffWaitlistResolutionController {
     '/api/dashboard/waitlist-entries/{actionReference}',
     'patch',
   )
-  resolve(
+  async resolve(
     @CurrentRestaurant() principal: RestaurantPrincipal,
     @Param('actionReference') actionReference: string,
     @Body() input: StaffResolutionDto,
-  ): { kind: 'success' } {
-    const result = this.store.resolveWaitlistEntryByActionReference(
-      principal.id,
-      actionReference,
-      input.resolution,
-      () => this.clock.now(),
-    );
+  ): Promise<{ kind: 'success' }> {
+    const result =
+      await this.store.resolveWaitlistEntryByActionReferencePersistent(
+        principal.id,
+        actionReference,
+        input.resolution,
+        () => this.clock.now(),
+      );
     if (result.kind === 'not-found') {
       throw notFoundFailure();
     }

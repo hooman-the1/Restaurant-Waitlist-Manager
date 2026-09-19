@@ -52,9 +52,12 @@ export class PrivateWaitlistStatusController {
     '/api/waitlist-entries/{privateToken}/cancellations',
     'post',
   )
-  cancel(@Param('privateToken') privateToken: string): { kind: 'cancelled' } {
-    const result = this.store.cancelWaitlistEntry(privateToken, () =>
-      this.clock.now(),
+  async cancel(
+    @Param('privateToken') privateToken: string,
+  ): Promise<{ kind: 'cancelled' }> {
+    const result = await this.store.cancelWaitlistEntryPersistent(
+      privateToken,
+      () => this.clock.now(),
     );
     if (result.kind === 'not-found') {
       throw notFoundFailure();

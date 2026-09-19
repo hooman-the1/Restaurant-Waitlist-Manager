@@ -70,10 +70,10 @@ export class RestaurantVerificationController {
   @Post()
   @HttpCode(HttpStatus.OK)
   @ApiContractOperation('/api/restaurant-verifications', 'post')
-  verify(
+  async verify(
     @Body() input: RestaurantVerificationDto,
     @Res({ passthrough: true }) response: Response,
-  ): { kind: 'success' } {
+  ): Promise<{ kind: 'success' }> {
     const verification = this.store.findVerificationToken(input.token);
     if (verification === undefined) {
       throw invalidOrUsedTokenFailure();
@@ -81,12 +81,14 @@ export class RestaurantVerificationController {
 
     const restaurant = this.store.findRestaurantById(verification.restaurantId);
     if (restaurant === undefined || restaurant.verified) {
-      this.store.verifyRestaurantWithToken(input.token);
+      await this.store.verifyRestaurantWithTokenPersistent(input.token);
       throw invalidOrUsedTokenFailure();
     }
 
     const signedSession = this.signer.sign(restaurant.slug);
-    const result = this.store.verifyRestaurantWithToken(input.token);
+    const result = await this.store.verifyRestaurantWithTokenPersistent(
+      input.token,
+    );
     if (result.kind === 'invalid') {
       throw invalidOrUsedTokenFailure();
     }
