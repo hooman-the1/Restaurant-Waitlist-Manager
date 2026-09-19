@@ -7,6 +7,7 @@ import {
   StaffWaitlistResolutionController,
 } from './dashboard';
 import { DemoDataSeeder, SystemClock } from './demo-data-seeder';
+import { DatabaseStore } from './database-store';
 import { InMemoryStore } from './in-memory-store';
 import { PrivateWaitlistStatusController } from './private-waitlist-status';
 import { PublicRestaurantLookupController } from './public-restaurant-lookup';
@@ -49,7 +50,8 @@ import {
     StaffWaitlistResolutionController,
   ],
   providers: [
-    InMemoryStore,
+    DatabaseStore,
+    { provide: InMemoryStore, useExisting: DatabaseStore },
     SystemClock,
     DemoDataSeeder,
     PasswordHasher,

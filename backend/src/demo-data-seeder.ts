@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 
 import { InMemoryStore } from './in-memory-store';
 
@@ -23,7 +23,7 @@ export class SystemClock {
 }
 
 @Injectable()
-export class DemoDataSeeder implements OnModuleInit {
+export class DemoDataSeeder implements OnApplicationBootstrap {
   private hasSeeded = false;
 
   constructor(
@@ -31,12 +31,17 @@ export class DemoDataSeeder implements OnModuleInit {
     private readonly clock: SystemClock,
   ) {}
 
-  onModuleInit(): void {
+  onApplicationBootstrap(): void {
     this.seed();
   }
 
   seed(): void {
     if (this.hasSeeded) {
+      return;
+    }
+
+    if (this.store.findRestaurantBySlug(DEMO_ACCESS.publicSlug) !== undefined) {
+      this.hasSeeded = true;
       return;
     }
 

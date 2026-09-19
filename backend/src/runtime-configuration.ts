@@ -5,19 +5,25 @@ interface ValidatedRuntimeEnvironment {
   PORT: number;
   SECRET_KEY: string;
   FRONTEND_ORIGIN: string;
+  DATABASE_URL: string;
 }
 
 export interface RuntimeConfiguration {
   port: number;
   secretKey: string;
   frontendOrigin: string;
+  databaseUrl?: string;
 }
 
 export function validateRuntimeEnvironment(
   environment: Record<string, unknown>,
 ): ValidatedRuntimeEnvironment {
   const secretKey = environment.SECRET_KEY;
-  if (typeof secretKey !== 'string' || secretKey.trim().length === 0) {
+  if (
+    typeof secretKey !== 'string' ||
+    secretKey.trim().length === 0 ||
+    secretKey === 'replace-with-a-local-signing-secret'
+  ) {
     throw new Error('Configuration error: SECRET_KEY is required.');
   }
 
@@ -48,10 +54,16 @@ export function validateRuntimeEnvironment(
     );
   }
 
+  const databaseUrl = environment.DATABASE_URL;
+  if (typeof databaseUrl !== 'string' || !isSqliteUrl(databaseUrl)) {
+    throw new Error('Configuration error: DATABASE_URL must be a SQLite URL.');
+  }
+
   return {
     PORT: port,
     SECRET_KEY: secretKey,
     FRONTEND_ORIGIN: frontendOrigin,
+    DATABASE_URL: databaseUrl,
   };
 }
 
@@ -73,7 +85,12 @@ export function readRuntimeConfiguration(
     port: config.get('PORT', { infer: true }),
     secretKey: config.get('SECRET_KEY', { infer: true }),
     frontendOrigin: config.get('FRONTEND_ORIGIN', { infer: true }),
+    databaseUrl: config.get('DATABASE_URL', { infer: true }),
   };
+}
+
+function isSqliteUrl(value: string): boolean {
+  return /^sqlite:\/\/(?::memory:|\.\/.+|\/.+)$/u.test(value);
 }
 
 function isAbsoluteHttpOrigin(value: string): boolean {

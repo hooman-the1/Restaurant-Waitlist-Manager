@@ -114,6 +114,14 @@ export type StaffWaitlistResolutionResult =
   | { kind: 'resolved'; entry: ResolvedWaitlistEntryRecord }
   | { kind: 'not-found' };
 
+export interface StoreSnapshot {
+  restaurants: RestaurantRecord[];
+  verificationTokens: VerificationTokenRecord[];
+  waitlistEntries: WaitlistEntryRecord[];
+  nextRestaurantId: number;
+  nextWaitlistEntryId: number;
+}
+
 @Injectable()
 export class InMemoryStore {
   private readonly restaurants = new Map<number, RestaurantRecord>();
@@ -649,6 +657,37 @@ export class InMemoryStore {
     this.waitlistEntries.clear();
     this.nextRestaurantId = 1;
     this.nextWaitlistEntryId = 1;
+  }
+
+  snapshotState(): StoreSnapshot {
+    return {
+      restaurants: [...this.restaurants.values()].map(cloneRestaurant),
+      verificationTokens: [...this.verificationTokens.values()].map(
+        (token) => ({ ...token }),
+      ),
+      waitlistEntries: [...this.waitlistEntries.values()].map(
+        cloneWaitlistEntry,
+      ),
+      nextRestaurantId: this.nextRestaurantId,
+      nextWaitlistEntryId: this.nextWaitlistEntryId,
+    };
+  }
+
+  restoreState(snapshot: StoreSnapshot): void {
+    this.restaurants.clear();
+    this.verificationTokens.clear();
+    this.waitlistEntries.clear();
+    for (const restaurant of snapshot.restaurants) {
+      this.restaurants.set(restaurant.id, cloneRestaurant(restaurant));
+    }
+    for (const token of snapshot.verificationTokens) {
+      this.verificationTokens.set(token.token, { ...token });
+    }
+    for (const entry of snapshot.waitlistEntries) {
+      this.waitlistEntries.set(entry.id, cloneWaitlistEntry(entry));
+    }
+    this.nextRestaurantId = snapshot.nextRestaurantId;
+    this.nextWaitlistEntryId = snapshot.nextWaitlistEntryId;
   }
 }
 

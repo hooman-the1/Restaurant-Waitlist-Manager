@@ -1,6 +1,6 @@
 # Restaurant Waitlist Manager backend
 
-This directory contains the NestJS API and its application-scoped in-memory store.
+This directory contains the NestJS API and its TypeORM-backed persistence layer.
 
 ## Run locally
 
@@ -13,7 +13,8 @@ npm ci
 Copy-Item .env.example .env
 ```
 
-Edit `.env` and replace the placeholder `SECRET_KEY` with a strong local value, then start the API:
+Edit `.env`, replace the placeholder `SECRET_KEY` with a strong local value,
+and confirm the database location before starting the API:
 
 ```powershell
 npm start
@@ -24,6 +25,16 @@ The default API base URL is `http://localhost:8000`. Local configuration is:
 - `PORT=8000`: HTTP listen port.
 - `FRONTEND_ORIGIN=http://localhost:4200`: browser origin allowed to make credentialed CORS requests.
 - `SECRET_KEY`: sensitive signing material for `restaurant_session` cookies. Never publish or commit it; the placeholder is rejected.
+- `DATABASE_URL=sqlite://./data/waitlist.sqlite`: required database connection URL. The documented value creates `backend/data/waitlist.sqlite` when the backend starts.
+
+The SQLite file and schema are created automatically. Restaurant accounts,
+verification state, active entries, and today's resolved entries persist across
+backend restarts. Schema migrations are intentionally out of scope for this
+local MVP; after a schema change, stop the backend and delete the local SQLite
+file to let TypeORM recreate it. To reset all local data at any time, stop the
+backend and delete `data/waitlist.sqlite` plus any adjacent
+`waitlist.sqlite-shm` or `waitlist.sqlite-wal` files. The `data/*.sqlite*`
+files are ignored by Git.
 
 API documentation is available at:
 
@@ -52,7 +63,9 @@ The corresponding Angular-shaped demo paths are:
 - `http://localhost:4200/status/7a2bfe87-27d4-4e13-8b0d-e7804c1e7421`
 - `http://localhost:4200/status/c2a7198e-6d40-4b53-9f81-37e5a6c04bd2`
 
-The production `front/` application calls this API at `http://localhost:8000`. Reloading an Angular page preserves the backend's in-memory state and the browser's signed session cookie; restarting the backend resets runtime state.
+The production `front/` application calls this API at `http://localhost:8000`.
+Reloading an Angular page or restarting the backend preserves database state
+and the browser's signed session cookie.
 
 ## Local restaurant sessions
 
@@ -75,11 +88,18 @@ try {
 
 The seeded restaurant has no usable login password or verification token. `demo-restaurant` alone is only the signed payload, not a valid cookie. Protected requests send the signed value in the `restaurant_session` cookie, not in a bearer or JWT `Authorization` header.
 
-Authentication has no server-side session record: the browser holds the signed cookie. After a restart, an old cookie for a runtime-created restaurant is unauthorized because that account no longer exists. A retained seeded-demo cookie can remain valid only when the browser keeps it and the restarted backend uses the same `SECRET_KEY`; changing the secret invalidates existing signatures.
+Authentication has no server-side session record: the browser holds the signed
+cookie. A retained cookie remains valid after restart when the browser keeps it,
+the restaurant remains in the database, and the backend uses the same
+`SECRET_KEY`; changing the secret invalidates existing signatures.
 
-## In-memory lifecycle
+## Persistence lifecycle
 
-Runtime signups, joins, resolutions, and consumed verification tokens are lost when the backend stops. A new process recreates only the deterministic seed. `store.reset()` is an internal test seam, not an HTTP or admin endpoint.
+Runtime signups, joins, resolutions, and unused verification tokens are stored
+in SQLite. Consumed tokens and entries removed by cleanup remain deleted after
+restart. Demo data is seeded only when the documented demo restaurant does not
+already exist, so startup does not overwrite persisted changes. `store.reset()`
+remains an internal test seam, not an HTTP or admin endpoint.
 
 ## Verification
 

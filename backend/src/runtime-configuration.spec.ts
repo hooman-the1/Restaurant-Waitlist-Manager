@@ -13,10 +13,16 @@ import {
 
 describe('validateRuntimeEnvironment', () => {
   it('uses local defaults and accepts overrides', () => {
-    expect(validateRuntimeEnvironment({ SECRET_KEY: 'secret' })).toEqual({
+    expect(
+      validateRuntimeEnvironment({
+        SECRET_KEY: 'secret',
+        DATABASE_URL: 'sqlite://./data/waitlist.sqlite',
+      }),
+    ).toEqual({
       PORT: 8000,
       SECRET_KEY: 'secret',
       FRONTEND_ORIGIN: 'http://localhost:4200',
+      DATABASE_URL: 'sqlite://./data/waitlist.sqlite',
     });
 
     expect(
@@ -24,13 +30,27 @@ describe('validateRuntimeEnvironment', () => {
         PORT: '8123',
         SECRET_KEY: 'override-secret',
         FRONTEND_ORIGIN: 'https://example.test:4443',
+        DATABASE_URL: 'sqlite://./data/override.sqlite',
       }),
     ).toEqual({
       PORT: 8123,
       SECRET_KEY: 'override-secret',
       FRONTEND_ORIGIN: 'https://example.test:4443',
+      DATABASE_URL: 'sqlite://./data/override.sqlite',
     });
   });
+
+  it.each([undefined, '', 'postgres://db.example.test/waitlist', 'not-a-url'])(
+    'rejects missing, malformed, or unsupported database URL %p without echoing it',
+    (databaseUrl) => {
+      expect(() =>
+        validateRuntimeEnvironment({
+          SECRET_KEY: 'secret',
+          DATABASE_URL: databaseUrl,
+        }),
+      ).toThrow('Configuration error: DATABASE_URL must be a SQLite URL.');
+    },
+  );
 
   it.each([undefined, '', '   '])(
     'rejects a missing or empty secret',
@@ -76,14 +96,16 @@ describe('validateRuntimeEnvironment', () => {
       PORT: process.env.PORT,
       SECRET_KEY: process.env.SECRET_KEY,
       FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN,
+      DATABASE_URL: process.env.DATABASE_URL,
     };
 
     delete process.env.PORT;
     delete process.env.SECRET_KEY;
     delete process.env.FRONTEND_ORIGIN;
+    delete process.env.DATABASE_URL;
     writeFileSync(
       envFile,
-      'PORT=8124\nSECRET_KEY=file-secret\nFRONTEND_ORIGIN=https://frontend.test\n',
+      'PORT=8124\nSECRET_KEY=file-secret\nFRONTEND_ORIGIN=https://frontend.test\nDATABASE_URL=sqlite://./data/test.sqlite\n',
     );
 
     try {
@@ -95,6 +117,7 @@ describe('validateRuntimeEnvironment', () => {
         port: 8124,
         secretKey: 'file-secret',
         frontendOrigin: 'https://frontend.test',
+        databaseUrl: 'sqlite://./data/test.sqlite',
       });
       await module.close();
     } finally {
@@ -105,7 +128,10 @@ describe('validateRuntimeEnvironment', () => {
 });
 
 function restoreEnvironment(
-  values: Record<'PORT' | 'SECRET_KEY' | 'FRONTEND_ORIGIN', string | undefined>,
+  values: Record<
+    'PORT' | 'SECRET_KEY' | 'FRONTEND_ORIGIN' | 'DATABASE_URL',
+    string | undefined
+  >,
 ): void {
   for (const [key, value] of Object.entries(values)) {
     if (value === undefined) {
