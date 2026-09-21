@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+nginx.conf
+nginx.conf.*
+.git
+.gitignore
+.vscode
+.idea
+*.swp
+*.swo
+*.tmp
