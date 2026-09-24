@@ -231,6 +231,30 @@ npm run build
 The frontend test command launches Karma and requires an available Chrome
 environment. The backend test suite runs serially through Jest.
 
+## Docker quick start
+
+Create the local backend environment file and set a strong signing secret:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
+
+Then build and start the two-container stack:
+
+```powershell
+docker compose build
+docker compose up -d
+docker compose ps
+docker compose logs backend
+```
+
+The application remains available at `http://localhost:4200`, with the API at
+`http://localhost:8000`. Rebuild after source changes with
+`docker compose up -d --build`. Use `docker compose down` to stop the stack
+without deleting data. `docker compose down -v` is a destructive reset that
+deletes the persistent SQLite volume. The backend uses `TZ=Asia/Tehran` so
+server-local daily cleanup follows this workspace's local day boundary.
+
 ## Additional documentation
 
 - [`backend/README.md`](backend/README.md) - backend setup and commands

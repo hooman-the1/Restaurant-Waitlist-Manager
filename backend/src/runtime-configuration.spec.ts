@@ -38,9 +38,19 @@ describe('validateRuntimeEnvironment', () => {
       FRONTEND_ORIGIN: 'https://example.test:4443',
       DATABASE_URL: 'sqlite://./data/override.sqlite',
     });
+
+    expect(
+      validateRuntimeEnvironment({
+        SECRET_KEY: 'postgres-secret',
+        DATABASE_URL:
+          'postgresql://db-user:db-password@localhost:5432/waitlist',
+      }),
+    ).toMatchObject({
+      DATABASE_URL: 'postgresql://db-user:db-password@localhost:5432/waitlist',
+    });
   });
 
-  it.each([undefined, '', 'postgres://db.example.test/waitlist', 'not-a-url'])(
+  it.each([undefined, '', 'mysql://db.example.test/waitlist', 'not-a-url'])(
     'rejects missing, malformed, or unsupported database URL %p without echoing it',
     (databaseUrl) => {
       expect(() =>
@@ -48,7 +58,9 @@ describe('validateRuntimeEnvironment', () => {
           SECRET_KEY: 'secret',
           DATABASE_URL: databaseUrl,
         }),
-      ).toThrow('Configuration error: DATABASE_URL must be a SQLite URL.');
+      ).toThrow(
+        'Configuration error: DATABASE_URL must be a SQLite or PostgreSQL URL.',
+      );
     },
   );
 

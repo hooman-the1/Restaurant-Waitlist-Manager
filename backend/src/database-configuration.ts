@@ -22,6 +22,16 @@ export function databasePathFromUrl(databaseUrl: string): string {
 }
 
 export function createDatabaseDataSource(databaseUrl: string): DataSource {
+  if (isPostgresUrl(databaseUrl)) {
+    return new DataSource({
+      type: 'postgres',
+      url: databaseUrl,
+      entities: DATABASE_ENTITIES,
+      synchronize: true,
+      logging: false,
+    });
+  }
+
   return new DataSource({
     type: 'better-sqlite3',
     database: databasePathFromUrl(databaseUrl),
@@ -29,4 +39,8 @@ export function createDatabaseDataSource(databaseUrl: string): DataSource {
     synchronize: true,
     logging: false,
   });
+}
+
+function isPostgresUrl(databaseUrl: string): boolean {
+  return /^postgres(?:ql)?:\/\//u.test(databaseUrl);
 }

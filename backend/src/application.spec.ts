@@ -3,7 +3,7 @@ import { createApplication } from './application';
 describe('createApplication', () => {
   it('fails before creating a listening application when the secret is absent', async () => {
     const previousSecret = process.env.SECRET_KEY;
-    delete process.env.SECRET_KEY;
+    process.env.SECRET_KEY = '';
 
     try {
       await expect(createApplication()).rejects.toThrow(

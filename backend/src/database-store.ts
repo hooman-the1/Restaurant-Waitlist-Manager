@@ -206,7 +206,22 @@ export class DatabaseStore
           })),
         );
       }
+      await this.synchronizePostgresSequences(manager);
     });
+  }
+
+  private async synchronizePostgresSequences(
+    manager: EntityManager,
+  ): Promise<void> {
+    if (this.requireDataSource().options.type !== 'postgres') {
+      return;
+    }
+
+    for (const table of ['restaurants', 'waitlist_entries']) {
+      await manager.query(
+        `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM "${table}"`,
+      );
+    }
   }
 
   private async clearTables(manager: EntityManager): Promise<void> {

@@ -55,8 +55,10 @@ export function validateRuntimeEnvironment(
   }
 
   const databaseUrl = environment.DATABASE_URL;
-  if (typeof databaseUrl !== 'string' || !isSqliteUrl(databaseUrl)) {
-    throw new Error('Configuration error: DATABASE_URL must be a SQLite URL.');
+  if (typeof databaseUrl !== 'string' || !isSupportedDatabaseUrl(databaseUrl)) {
+    throw new Error(
+      'Configuration error: DATABASE_URL must be a SQLite or PostgreSQL URL.',
+    );
   }
 
   return {
@@ -91,6 +93,23 @@ export function readRuntimeConfiguration(
 
 function isSqliteUrl(value: string): boolean {
   return /^sqlite:\/\/(?::memory:|\.\/.+|\/.+)$/u.test(value);
+}
+
+function isSupportedDatabaseUrl(value: string): boolean {
+  if (isSqliteUrl(value)) {
+    return true;
+  }
+
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === 'postgres:' || url.protocol === 'postgresql:') &&
+      url.hostname.length > 0 &&
+      url.pathname.length > 1
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isAbsoluteHttpOrigin(value: string): boolean {
